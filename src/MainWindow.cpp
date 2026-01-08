@@ -84,9 +84,9 @@ void MainWindow::onNavItemChanged(int index)
     else if (text == "Events & Readings") ui->centralStack->setCurrentIndex(4);
     else if (text == "System Status") ui->centralStack->setCurrentIndex(5);
     // else if (text == "Scheduler") ui->centralStack->setCurrentIndex(6);
-    else if (text == "Notifications") ui->centralStack->setCurrentIndex(7);
+    else if (text == "Notifications") ui->centralStack->setCurrentIndex(6);
     // else if (text == "App Services") ui->centralStack->setCurrentIndex(8);
-    else if (text == "Rules Engine") ui->centralStack->setCurrentIndex(9);
+    else if (text == "Rules Engine") ui->centralStack->setCurrentIndex(7);
 }
 
 void MainWindow::showSettings()

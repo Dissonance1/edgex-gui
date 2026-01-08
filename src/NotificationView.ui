@@ -74,7 +74,7 @@
          </column>
          <column>
           <property name="text">
-           <string>Urgency</string>
+           <string>Severity</string>
           </property>
          </column>
          <column>
@@ -141,7 +141,7 @@
          </column>
          <column>
           <property name="text">
-           <string>Receiver</string>
+           <string>Description</string>
           </property>
          </column>
          <column>

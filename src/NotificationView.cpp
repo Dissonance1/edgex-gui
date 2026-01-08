@@ -50,7 +50,7 @@ void NotificationView::onNotificationsReceived(const QJsonArray &notifications)
         ui->table->setItem(row, 0, new QTableWidgetItem(obj["id"].toString()));
         ui->table->setItem(row, 1, new QTableWidgetItem(obj["category"].toString()));
         ui->table->setItem(row, 2, new QTableWidgetItem(obj["content"].toString()));
-        ui->table->setItem(row, 3, new QTableWidgetItem(obj["urgency"].toString()));
+        ui->table->setItem(row, 3, new QTableWidgetItem(obj["severity"].toString()));
         ui->table->setItem(row, 4, new QTableWidgetItem(QString::number(obj["created"].toVariant().toLongLong())));
     }
 }
@@ -63,19 +63,27 @@ void NotificationView::onSubscriptionsReceived(const QJsonArray &subscriptions)
         int row = ui->subTable->rowCount();
         ui->subTable->insertRow(row);
         ui->subTable->setItem(row, 0, new QTableWidgetItem(obj["name"].toString()));
-        ui->subTable->setItem(row, 1, new QTableWidgetItem(obj["receiver"].toString()));
+        ui->subTable->setItem(row, 1, new QTableWidgetItem(obj["description"].toString()));
+        
+        QJsonArray channels = obj["channels"].toArray();
+        QStringList chanList;
+        for (const auto &v_chan : channels) {
+            QJsonObject chan = v_chan.toObject();
+            chanList.append(chan["type"].toString());
+        }
+        ui->subTable->setItem(row, 2, new QTableWidgetItem(chanList.join(", ")));
         
         QJsonArray cats = obj["categories"].toArray();
         QStringList catList;
         for (const auto &c : cats) catList.append(c.toString());
-        ui->subTable->setItem(row, 2, new QTableWidgetItem(catList.join(", ")));
+        ui->subTable->setItem(row, 3, new QTableWidgetItem(catList.join(", ")));
 
         QJsonArray labels = obj["labels"].toArray();
         QStringList labelList;
         for (const auto &l : labels) labelList.append(l.toString());
-        ui->subTable->setItem(row, 3, new QTableWidgetItem(labelList.join(", ")));
+        ui->subTable->setItem(row, 4, new QTableWidgetItem(labelList.join(", ")));
 
-        ui->subTable->setItem(row, 4, new QTableWidgetItem(obj["adminState"].toString()));
+        ui->subTable->setItem(row, 5, new QTableWidgetItem(obj["adminState"].toString()));
     }
 }
 

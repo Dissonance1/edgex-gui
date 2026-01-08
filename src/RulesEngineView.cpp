@@ -70,13 +70,14 @@ void RulesEngineView::onRulesReceived(const QJsonArray &rules)
         int row = ui->rulesTable->rowCount();
         ui->rulesTable->insertRow(row);
         ui->rulesTable->setItem(row, 0, new QTableWidgetItem(id));
-        ui->rulesTable->setItem(row, 1, new QTableWidgetItem(obj["status"].toString()));
+        ui->rulesTable->setItem(row, 1, new QTableWidgetItem(obj["sql"].toString()));
         
         QJsonArray actions = obj["actions"].toArray();
         QStringList actList;
         for (const auto &a : actions) actList.append(a.toObject().keys().join(","));
         ui->rulesTable->setItem(row, 2, new QTableWidgetItem(actList.join(" | ")));
-        ui->rulesTable->setItem(row, 3, new QTableWidgetItem("Select to load..."));
+        ui->rulesTable->setItem(row, 3, new QTableWidgetItem(obj["status"].toString()));
+        ui->rulesTable->setItem(row, 4, new QTableWidgetItem("Select to load..."));
     }
 }
 
@@ -88,7 +89,7 @@ void RulesEngineView::onRuleStatusReceived(const QString &id, const QJsonObject 
                 .arg(status["source_messages_count"].toVariant().toLongLong())
                 .arg(status["sink_messages_count"].toVariant().toLongLong())
                 .arg(status["source_exceptions_count"].toVariant().toLongLong());
-            ui->rulesTable->setItem(i, 3, new QTableWidgetItem(summary));
+            ui->rulesTable->setItem(i, 4, new QTableWidgetItem(summary));
             break;
         }
     }

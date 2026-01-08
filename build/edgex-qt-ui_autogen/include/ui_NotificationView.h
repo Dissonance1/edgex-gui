@@ -164,7 +164,7 @@ public:
         QTableWidgetItem *___qtablewidgetitem2 = table->horizontalHeaderItem(2);
         ___qtablewidgetitem2->setText(QCoreApplication::translate("NotificationView", "Content", nullptr));
         QTableWidgetItem *___qtablewidgetitem3 = table->horizontalHeaderItem(3);
-        ___qtablewidgetitem3->setText(QCoreApplication::translate("NotificationView", "Urgency", nullptr));
+        ___qtablewidgetitem3->setText(QCoreApplication::translate("NotificationView", "Severity", nullptr));
         QTableWidgetItem *___qtablewidgetitem4 = table->horizontalHeaderItem(4);
         ___qtablewidgetitem4->setText(QCoreApplication::translate("NotificationView", "Created", nullptr));
         tabWidget->setTabText(tabWidget->indexOf(notificationsTab), QCoreApplication::translate("NotificationView", "Notifications", nullptr));
@@ -174,7 +174,7 @@ public:
         QTableWidgetItem *___qtablewidgetitem5 = subTable->horizontalHeaderItem(0);
         ___qtablewidgetitem5->setText(QCoreApplication::translate("NotificationView", "Name", nullptr));
         QTableWidgetItem *___qtablewidgetitem6 = subTable->horizontalHeaderItem(1);
-        ___qtablewidgetitem6->setText(QCoreApplication::translate("NotificationView", "Receiver", nullptr));
+        ___qtablewidgetitem6->setText(QCoreApplication::translate("NotificationView", "Description", nullptr));
         QTableWidgetItem *___qtablewidgetitem7 = subTable->horizontalHeaderItem(2);
         ___qtablewidgetitem7->setText(QCoreApplication::translate("NotificationView", "Categories", nullptr));
         QTableWidgetItem *___qtablewidgetitem8 = subTable->horizontalHeaderItem(3);
