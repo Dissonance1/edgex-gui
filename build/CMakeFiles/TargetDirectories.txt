@@ -1,0 +1,5 @@
+/home/amit/src/edgex/edgex-gui/build/CMakeFiles/edgex-qt-ui.dir
+/home/amit/src/edgex/edgex-gui/build/CMakeFiles/edit_cache.dir
+/home/amit/src/edgex/edgex-gui/build/CMakeFiles/rebuild_cache.dir
+/home/amit/src/edgex/edgex-gui/build/CMakeFiles/edgex-qt-ui_autogen_timestamp_deps.dir
+/home/amit/src/edgex/edgex-gui/build/CMakeFiles/edgex-qt-ui_autogen.dir

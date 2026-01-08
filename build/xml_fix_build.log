@@ -1,0 +1,7 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+[  2%] Built target edgex-qt-ui_autogen
+[  4%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DevicesView.cpp.o
+[  7%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MainWindow.cpp.o
+[  9%] Linking CXX executable bin/edgex-qt-ui
+[100%] Built target edgex-qt-ui

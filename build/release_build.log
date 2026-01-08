@@ -1,0 +1,8 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+[  2%] Built target edgex-qt-ui_autogen
+[  4%] Automatic RCC for src/resources.qrc
+[  9%] Building CXX object CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/UVLADIE3JM/qrc_resources.cpp.o
+[  9%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MainWindow.cpp.o
+[ 12%] Linking CXX executable bin/edgex-qt-ui
+[100%] Built target edgex-qt-ui

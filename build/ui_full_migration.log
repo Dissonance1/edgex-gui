@@ -1,0 +1,41 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+[  2%] Built target edgex-qt-ui_autogen
+[  5%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o
+[  7%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AddStreamDialog.cpp.o
+[ 15%] Building CXX object CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o
+[ 15%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AddRuleDialog.cpp.o
+[ 15%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AppServiceClient.cpp.o
+[ 17%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AddJsonDialog.cpp.o
+[ 20%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AddProfileDialog.cpp.o
+[ 23%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AddSubscriptionDialog.cpp.o
+[ 25%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AppServicesView.cpp.o
+[ 28%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/CommandClient.cpp.o
+[ 30%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/CommandExecutionView.cpp.o
+[ 33%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/ConfigManager.cpp.o
+[ 35%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/CoreDataClient.cpp.o
+[ 38%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DashboardView.cpp.o
+[ 41%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DeviceServicesModel.cpp.o
+[ 43%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DeviceServicesView.cpp.o
+[ 46%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DevicesTableModel.cpp.o
+[ 48%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DevicesView.cpp.o
+[ 51%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/EdgexClientBase.cpp.o
+[ 53%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/EventsModel.cpp.o
+[ 56%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/EventsReadingsView.cpp.o
+[ 58%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MainWindow.cpp.o
+[ 61%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MetadataClient.cpp.o
+[ 64%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/NotificationView.cpp.o
+[ 66%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/ProfilesModel.cpp.o
+[ 69%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/ProfilesView.cpp.o
+[ 71%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/ReadingsModel.cpp.o
+[ 74%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/RulesClient.cpp.o
+[ 76%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/RulesEngineView.cpp.o
+[ 79%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/SchedulerView.cpp.o
+[ 82%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/ServiceStatusModel.cpp.o
+[ 84%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/SettingsDialog.cpp.o
+[ 87%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/SupportClient.cpp.o
+[ 89%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/SystemClient.cpp.o
+[ 92%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/SystemStatusView.cpp.o
+[ 94%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/main.cpp.o
+[ 97%] Linking CXX executable bin/edgex-qt-ui
+[100%] Built target edgex-qt-ui

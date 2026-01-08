@@ -1,0 +1,25 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+[  2%] Built target edgex-qt-ui_autogen
+[  4%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DevicesView.cpp.o
+[  7%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MainWindow.cpp.o
+In file included from [01m[K/home/amit/src/edgex/edgex-gui/src/DevicesView.cpp:2[m[K:
+[01m[K/home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/include/ui_DevicesView.h:[m[K In member function ‘[01m[Kvoid Ui_DevicesView::[01;32m[KsetupUi[m[K(QWidget*)[m[K’:
+[01m[K/home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/include/ui_DevicesView.h:87:34:[m[K [01;31m[Kerror: [m[Kno matching function for call to ‘[01m[KQVBoxLayout::addWidget()[m[K’
+   87 |         [01;31m[KverticalLayout->addWidget()[m[K;
+      |         [01;31m[K~~~~~~~~~~~~~~~~~~~~~~~~~^~[m[K
+In file included from [01m[K/usr/include/x86_64-linux-gnu/qt6/QtWidgets/QHBoxLayout:1[m[K,
+                 from [01m[K/home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/include/ui_DevicesView.h:14[m[K:
+[01m[K/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qboxlayout.h:38:10:[m[K [01;36m[Knote: [m[Kcandidate: ‘[01m[Kvoid QBoxLayout::[01;32m[KaddWidget[m[K(QWidget*, int, Qt::Alignment)[m[K’
+   38 |     void [01;36m[KaddWidget[m[K(QWidget *, int stretch = 0, Qt::Alignment alignment = Qt::Alignment());
+      |          [01;36m[K^~~~~~~~~[m[K
+[01m[K/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qboxlayout.h:38:10:[m[K [01;36m[Knote: [m[K  candidate expects 3 arguments, 0 provided
+[01m[K/home/amit/src/edgex/edgex-gui/src/DevicesView.cpp:[m[K In constructor ‘[01m[KDevicesView::[01;32m[KDevicesView[m[K(QWidget*)[m[K’:
+[01m[K/home/amit/src/edgex/edgex-gui/src/DevicesView.cpp:27:17:[m[K [01;31m[Kerror: [m[K‘[01m[Kclass Ui::DevicesView[m[K’ has no member named ‘[01m[KcommandButton[m[K’; did you mean ‘[01m[KaddButton[m[K’?
+   27 |     connect(ui->[01;31m[KcommandButton[m[K, &QPushButton::clicked, this, &DevicesView::onViewDevice);
+      |                 [01;31m[K^~~~~~~~~~~~~[m[K
+      |                 [32m[KaddButton[m[K
+make[2]: *** [CMakeFiles/edgex-qt-ui.dir/build.make:328: CMakeFiles/edgex-qt-ui.dir/src/DevicesView.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+make[1]: *** [CMakeFiles/Makefile2:86: CMakeFiles/edgex-qt-ui.dir/all] Error 2
+make: *** [Makefile:91: all] Error 2

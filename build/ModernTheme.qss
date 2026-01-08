@@ -1,0 +1,152 @@
+/* ModernTheme.qss - Honeycomb Theme */
+
+/* Global Colors:
+   Main Orange: #F9942A
+   Background White: #FFFDF2
+   Navy Blue: #023356
+   Orange Accent: #FFF9D5
+*/
+
+* {
+    font-family: "Montserrat", "Segoe UI", "Roboto", "Helvetica", sans-serif;
+    font-size: 14px;
+    color: #333333;
+}
+
+QMainWindow, QWidget#centralWidget {
+    background-color: #FFFFFF; /* Pure white content area */
+}
+
+/* Sidebar Styling */
+QWidget#navContainer {
+    background-color: #FFFDF2; /* Background White */
+    border-right: 1px solid #E0E0E0;
+}
+
+QListWidget {
+    background-color: transparent;
+    border: none;
+    outline: none;
+}
+
+QListWidget::item {
+    height: 40px;
+    padding-left: 15px;
+    margin: 2px 10px;
+    border-radius: 5px;
+    color: #555555;
+    font-weight: 500;
+}
+
+QListWidget::item:hover {
+    background-color: #FFF9D5; /* Orange Accent */
+    color: #F9942A; /* Main Orange Text */
+}
+
+QListWidget::item:selected {
+    background-color: #FFF9D5; /* Orange Accent */
+    color: #F9942A;
+    border-left: 4px solid #F9942A; /* Orange Indicator */
+}
+
+/* Headers in ListWidget (custom property logic may be needed or separate labels) */
+/* Assuming standard items for now */
+
+/* Buttons */
+QPushButton {
+    background-color: #F9942A; /* Main Orange */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #e68a25; /* Slightly Darker Orange */
+}
+
+QPushButton:pressed {
+    background-color: #cc7a20;
+}
+
+/* Secondary/Action Buttons (e.g. Delete, Stop) might need red */
+QPushButton#btnDelete, QPushButton#btnStopRule {
+    background-color: #e74c3c;
+}
+QPushButton#btnDelete:hover, QPushButton#btnStopRule:hover {
+    background-color: #c0392b;
+}
+
+/* Toolbars */
+QFrame#toolbar {
+    border-bottom: 1px solid #E0E0E0;
+    background-color: white;
+}
+
+/* Tables */
+QTableWidget, QTableView {
+    background-color: white;
+    alternate-background-color: #FAFAFA;
+    selection-background-color: #FFF9D5; /* Orange Accent */
+    selection-color: #023356; /* Navy Blue Text */
+    border: 1px solid #E0E0E0;
+    gridline-color: #F0F0F0;
+}
+
+QHeaderView::section:horizontal {
+    background-color: white;
+    padding: 8px;
+    border: none;
+    border-bottom: 2px solid #F9942A; /* Orange Underline */
+    font-weight: bold;
+    color: #95a5a6;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+QHeaderView::section:vertical {
+    background-color: white;
+    border: none;
+    border-right: 1px solid #E0E0E0; /* Simple separator for row numbers */
+    color: #999999;
+    padding-right: 4px;
+}
+
+/* LineEdits */
+QLineEdit {
+    border: 1px solid #E0E0E0;
+    border-radius: 4px;
+    padding: 6px;
+    background-color: white;
+}
+
+QLineEdit:focus {
+    border: 1px solid #F9942A;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    border: none;
+    background: #F0F0F0;
+    width: 8px;
+    margin: 0px 0px 0px 0px;
+}
+QScrollBar::handle:vertical {
+    background: #CCCCCC;
+    min-height: 20px;
+    border-radius: 4px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* Labels */
+QLabel {
+    color: #333333;
+}
+
+/* Specific Labels */
+QLabel#titleLabel {
+    color: #023356; /* Navy Blue Title */
+}

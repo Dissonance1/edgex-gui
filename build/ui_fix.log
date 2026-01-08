@@ -1,0 +1,14 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+[  2%] Built target edgex-qt-ui_autogen
+[  4%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DevicesView.cpp.o
+[  7%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MainWindow.cpp.o
+[01m[K/home/amit/src/edgex/edgex-gui/src/DevicesView.cpp:[m[K In constructor ‘[01m[KDevicesView::[01;32m[KDevicesView[m[K(QWidget*)[m[K’:
+[01m[K/home/amit/src/edgex/edgex-gui/src/DevicesView.cpp:27:17:[m[K [01;31m[Kerror: [m[K‘[01m[Kclass Ui::DevicesView[m[K’ has no member named ‘[01m[KcommandButton[m[K’; did you mean ‘[01m[KaddButton[m[K’?
+   27 |     connect(ui->[01;31m[KcommandButton[m[K, &QPushButton::clicked, this, &DevicesView::onViewDevice);
+      |                 [01;31m[K^~~~~~~~~~~~~[m[K
+      |                 [32m[KaddButton[m[K
+make[2]: *** [CMakeFiles/edgex-qt-ui.dir/build.make:328: CMakeFiles/edgex-qt-ui.dir/src/DevicesView.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+make[1]: *** [CMakeFiles/Makefile2:86: CMakeFiles/edgex-qt-ui.dir/all] Error 2
+make: *** [Makefile:91: all] Error 2

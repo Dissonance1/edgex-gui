@@ -1,0 +1,17 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+[  2%] Built target edgex-qt-ui_autogen
+[  4%] Building CXX object CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o
+[  7%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/SystemClient.cpp.o
+[  9%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MainWindow.cpp.o
+[ 12%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/SystemStatusView.cpp.o
+[01m[K/home/amit/src/edgex/edgex-gui/src/SystemClient.cpp:18:6:[m[K [01;31m[Kerror: [m[Kexpected unqualified-id before ‘[01m[K)[m[K’ token
+   18 |     }[01;31m[K)[m[K;
+      |      [01;31m[K^[m[K
+[01m[K/home/amit/src/edgex/edgex-gui/src/SystemClient.cpp:19:1:[m[K [01;31m[Kerror: [m[Kexpected declaration before ‘[01m[K}[m[K’ token
+   19 | [01;31m[K}[m[K
+      | [01;31m[K^[m[K
+make[2]: *** [CMakeFiles/edgex-qt-ui.dir/build.make:552: CMakeFiles/edgex-qt-ui.dir/src/SystemClient.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+make[1]: *** [CMakeFiles/Makefile2:86: CMakeFiles/edgex-qt-ui.dir/all] Error 2
+make: *** [Makefile:91: all] Error 2

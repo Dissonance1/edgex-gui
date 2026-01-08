@@ -1,0 +1,12 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+[  2%] Built target edgex-qt-ui_autogen
+[  4%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/DevicesView.cpp.o
+[  7%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/MainWindow.cpp.o
+[  9%] Linking CXX executable bin/edgex-qt-ui
+/usr/bin/ld: CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o: in function `DevicesView::qt_static_metacall(QObject*, QMetaObject::Call, int, void**)':
+mocs_compilation.cpp:(.text+0x2312): undefined reference to `DevicesView::onViewDevice()'
+collect2: error: ld returned 1 exit status
+make[2]: *** [CMakeFiles/edgex-qt-ui.dir/build.make:693: bin/edgex-qt-ui] Error 1
+make[1]: *** [CMakeFiles/Makefile2:86: CMakeFiles/edgex-qt-ui.dir/all] Error 2
+make: *** [Makefile:91: all] Error 2

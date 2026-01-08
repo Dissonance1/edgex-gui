@@ -1,0 +1,25 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Automatic MOC and UIC for target edgex-qt-ui
+
+AutoUic subprocess error
+------------------------
+The uic process failed to compile
+  "SRC:/src/DevicesView.ui"
+into
+  "SRC:/build/edgex-qt-ui_autogen/include/ui_DevicesView.h"
+included by
+  "SRC:/src/DevicesView.cpp"
+Process failed with return value 1
+
+Command
+-------
+/usr/lib/qt6/libexec/uic -o /home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/include/ui_DevicesView.h /home/amit/src/edgex/edgex-gui/src/DevicesView.ui
+
+Output
+------
+uic: Error in line 91, column 11 : Opening and ending tag mismatch.
+File '/home/amit/src/edgex/edgex-gui/src/DevicesView.ui' is not valid
+
+make[2]: *** [CMakeFiles/edgex-qt-ui_autogen.dir/build.make:75: edgex-qt-ui_autogen/timestamp] Error 1
+make[1]: *** [CMakeFiles/Makefile2:138: CMakeFiles/edgex-qt-ui_autogen.dir/all] Error 2
+make: *** [Makefile:91: all] Error 2
