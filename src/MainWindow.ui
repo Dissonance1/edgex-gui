@@ -51,10 +51,10 @@
         </property>
         <item alignment="Qt::AlignLeft">
          <widget class="QLabel" name="logoLabel">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>16777215</width>
-            <height>100</height>
+            <width>220</width>
+            <height>120</height>
            </size>
           </property>
           <property name="text">
@@ -162,6 +162,29 @@
             </font>
            </property>
           </item>
+         </widget>
+        </item>
+        <item>
+         <spacer name="verticalSpacer">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnSettings">
+          <property name="text">
+           <string>Settings</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton { background-color: transparent; color: #555555; text-align: left; padding-left: 20px; border: none; font-size: 14px; font-weight: 500; height: 40px; margin: 5px; } QPushButton:hover { background-color: #FFF9D5; color: #F9942A; }</string>
+          </property>
          </widget>
         </item>
        </layout>

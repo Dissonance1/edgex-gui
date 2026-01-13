@@ -9,15 +9,18 @@
 #include "AddJsonDialog.h"
 
 RulesEngineView::RulesEngineView(QWidget *parent)
-    : QWidget(parent), ui(new Ui::RulesEngineView), m_client(new RulesClient(this))
+    : QWidget(parent), ui(new Ui::RulesEngineView), m_client(new RulesClient(this)), m_isEditing(false), m_isViewingSql(false)
 {
     ui->setupUi(this);
     
     ui->streamsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ui->rulesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    ui->rulesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->streamsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
     connect(m_client, &RulesClient::streamsReceived, this, &RulesEngineView::onStreamsReceived);
     connect(m_client, &RulesClient::rulesReceived, this, &RulesEngineView::onRulesReceived);
+    connect(m_client, &RulesClient::ruleReceived, this, &RulesEngineView::onRuleReceived);
     connect(m_client, &RulesClient::ruleStatusReceived, this, &RulesEngineView::onRuleStatusReceived);
     connect(m_client, &RulesClient::operationCompleted, this, &RulesEngineView::onOperationCompleted);
     
@@ -32,6 +35,7 @@ RulesEngineView::RulesEngineView(QWidget *parent)
     connect(ui->btnViewSql, &QPushButton::clicked, this, &RulesEngineView::onViewSql);
     connect(ui->btnMetrics, &QPushButton::clicked, this, &RulesEngineView::onViewMetrics);
     connect(ui->btnDeleteRule, &QPushButton::clicked, this, &RulesEngineView::onDeleteRule);
+    connect(ui->btnEditRule, &QPushButton::clicked, this, &RulesEngineView::onEditRule);
 
     refresh();
 }
@@ -95,6 +99,31 @@ void RulesEngineView::onRuleStatusReceived(const QString &id, const QJsonObject 
     }
 }
 
+void RulesEngineView::onRuleReceived(const QString &id, const QJsonObject &rule)
+{
+    m_rulesData[id] = rule;
+    
+    // Update table with SQL if it was missing
+    for (int i = 0; i < ui->rulesTable->rowCount(); ++i) {
+        if (ui->rulesTable->item(i, 0)->text() == id) {
+            ui->rulesTable->setItem(i, 1, new QTableWidgetItem(rule["sql"].toString()));
+            break;
+        }
+    }
+
+    if (id == m_pendingRuleId) {
+        if (m_isEditing) {
+            m_isEditing = false;
+            m_pendingRuleId = "";
+            onEditRule(); // Try again now that we have data
+        } else if (m_isViewingSql) {
+            m_isViewingSql = false;
+            m_pendingRuleId = "";
+            onViewSql(); // Try again now that we have data
+        }
+    }
+}
+
 void RulesEngineView::onAddStream()
 {
     AddStreamDialog dlg(this);
@@ -121,6 +150,33 @@ void RulesEngineView::onAddRule()
         QJsonObject rule = dlg.ruleData();
         QString json = QJsonDocument(rule).toJson(QJsonDocument::Compact);
         m_client->createRule(dlg.id(), json);
+    }
+}
+
+void RulesEngineView::onEditRule()
+{
+    QModelIndexList selected = ui->rulesTable->selectionModel()->selectedRows();
+    if (selected.isEmpty()) return;
+    QString id = ui->rulesTable->item(selected.first().row(), 0)->text();
+    
+    // Check if we have the full rule (SQL)
+    if (!m_rulesData.contains(id) || m_rulesData[id]["sql"].toString().isEmpty()) {
+        m_pendingRuleId = id;
+        m_isEditing = true;
+        m_client->fetchRule(id);
+        return;
+    }
+
+    AddRuleDialog dlg(this);
+    dlg.setRuleData(id, m_rulesData[id]);
+    
+    if (dlg.exec() == QDialog::Accepted) {
+        m_client->setBaseUrl(ConfigManager::instance().rulesUrl());
+        QJsonObject rule = dlg.ruleData();
+        QString json = QJsonDocument(rule).toJson(QJsonDocument::Compact);
+        
+        // eKuiper edit uses PUT /rules/{id}
+        m_client->updateRule(id, json); 
     }
 }
 
@@ -155,10 +211,16 @@ void RulesEngineView::onViewSql()
     QTableWidgetItem *item = ui->rulesTable->currentItem();
     if (!item) return;
     QString id = ui->rulesTable->item(item->row(), 0)->text();
-    if (!m_rulesData.contains(id)) return;
+    
+    if (!m_rulesData.contains(id) || m_rulesData[id]["sql"].toString().isEmpty()) {
+        m_pendingRuleId = id;
+        m_isViewingSql = true;
+        m_client->fetchRule(id);
+        return;
+    }
     
     QString sql = m_rulesData[id]["sql"].toString();
-    AddJsonDialog dlg("Rule SQL Query", sql, this); 
+    AddJsonDialog dlg("Rule SQL Query", sql, this, false); // false = no JSON validation
     dlg.exec();
 }
 

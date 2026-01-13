@@ -19,6 +19,7 @@ public:
     explicit AddRuleDialog(QWidget *parent = nullptr);
     QString id() const;
     QJsonObject ruleData() const;
+    void setRuleData(const QString &id, const QJsonObject &data);
 
 private slots:
     void onSinkTypeChanged(int index);

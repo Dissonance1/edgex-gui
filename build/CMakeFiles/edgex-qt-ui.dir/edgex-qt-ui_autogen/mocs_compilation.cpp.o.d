@@ -342,25 +342,14 @@ CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o: \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qsizepolicy.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qcursor.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qbitmap.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/QJsonArray \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsonarray.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsonvalue.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qcborvalue.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qdatetime.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qcalendar.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qlocale.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qcborcommon.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qregularexpression.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qurl.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/quuid.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/QJsonObject \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsonobject.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QComboBox \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qcombobox.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qabstractitemdelegate.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qstyleoption.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qlocale.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qabstractspinbox.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qvalidator.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qregularexpression.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qslider.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qabstractslider.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qstyle.h \
@@ -373,16 +362,25 @@ CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o: \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qlineedit.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qtextcursor.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qtextdocument.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qurl.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qtextformat.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qpen.h \
  /usr/include/x86_64-linux-gnu/qt6/QtGui/qtextoption.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QTextEdit \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qtextedit.h \
  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qabstractscrollarea.h \
- /home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/UVLADIE3JM/../../../src/MetadataClient.h \
- /home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/UVLADIE3JM/../../../src/EdgexClientBase.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/QObject \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qobject.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/QJsonObject \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsonobject.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsonvalue.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qcborvalue.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qdatetime.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qcalendar.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qcborcommon.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/quuid.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/QJsonArray \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsonarray.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/QJsonDocument \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsondocument.h \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/QNetworkAccessManager \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/qnetworkaccessmanager.h \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/qtnetworkglobal.h \
@@ -400,6 +398,7 @@ CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o: \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/QList \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/qlist.h \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/QObject \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/qobject.h \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/QSslConfiguration \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/qsslconfiguration.h \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/qsslsocket.h \
@@ -424,13 +423,14 @@ CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o: \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/QNetworkRequest \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/qnetworkrequest.h \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/QNetworkAccessManager \
+ /home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/UVLADIE3JM/../../../src/MetadataClient.h \
+ /home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/UVLADIE3JM/../../../src/EdgexClientBase.h \
+ /usr/include/x86_64-linux-gnu/qt6/QtCore/QObject \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/QUrl \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/QHttpMultiPart \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/qhttpmultipart.h \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/QByteArray \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/qbytearray.h \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/QJsonDocument \
- /usr/include/x86_64-linux-gnu/qt6/QtCore/qjsondocument.h \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/QSslError \
  /usr/include/x86_64-linux-gnu/qt6/QtNetwork/qsslerror.h \
  /home/amit/src/edgex/edgex-gui/build/edgex-qt-ui_autogen/UVLADIE3JM/moc_AddJsonDialog.cpp \

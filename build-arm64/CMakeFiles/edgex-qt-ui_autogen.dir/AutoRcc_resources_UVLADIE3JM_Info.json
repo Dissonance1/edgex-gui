@@ -1,0 +1,20 @@
+{
+	"BUILD_DIR" : "/home/amit/src/edgex/edgex-gui/build-arm64/edgex-qt-ui_autogen",
+	"CMAKE_BINARY_DIR" : "/home/amit/src/edgex/edgex-gui/build-arm64",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/amit/src/edgex/edgex-gui/build-arm64",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/amit/src/edgex/edgex-gui",
+	"CMAKE_SOURCE_DIR" : "/home/amit/src/edgex/edgex-gui",
+	"GENERATOR" : "Unix Makefiles",
+	"INCLUDE_DIR" : "/home/amit/src/edgex/edgex-gui/build-arm64/edgex-qt-ui_autogen/include",
+	"INPUTS" : [ "/home/amit/src/edgex/edgex-gui/src/resources/honeycomblogo.png" ],
+	"LOCK_FILE" : "/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/edgex-qt-ui_autogen.dir/AutoRcc_resources_UVLADIE3JM_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "resources" ],
+	"OUTPUT_CHECKSUM" : "UVLADIE3JM",
+	"OUTPUT_NAME" : "qrc_resources.cpp",
+	"RCC_EXECUTABLE" : "/usr/lib/qt6/libexec/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/edgex-qt-ui_autogen.dir/AutoRcc_resources_UVLADIE3JM_Used.txt",
+	"SOURCE" : "/home/amit/src/edgex/edgex-gui/src/resources.qrc",
+	"VERBOSITY" : 0
+}

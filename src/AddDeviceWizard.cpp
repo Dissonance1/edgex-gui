@@ -2,7 +2,13 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QFormLayout>
-#include "ConfigManager.h"
+#include <QMessageBox>
+
+// Helper to access protected registerField
+class AccessibleWizardPage : public QWizardPage {
+public:
+    using QWizardPage::registerField;
+};
 
 AddDeviceWizard::AddDeviceWizard(QWidget *parent, const QJsonObject &editData)
     : QWizard(parent), m_editData(editData), m_client(new MetadataClient(this))
@@ -11,85 +17,82 @@ AddDeviceWizard::AddDeviceWizard(QWidget *parent, const QJsonObject &editData)
     setWindowTitle(m_isEdit ? "Edit Device" : "Add Device Wizard");
     setWizardStyle(ModernStyle);
     
+    // Create Pages
     addPage(createServicePage());
     addPage(createProfilePage());
     addPage(createInfoPage());
     addPage(createProtocolPage());
 
+    // Connect Client Signals
     connect(m_client, &MetadataClient::deviceServicesReceived, this, &AddDeviceWizard::onServicesReceived);
     connect(m_client, &MetadataClient::deviceProfilesReceived, this, &AddDeviceWizard::onProfilesReceived);
 
-    m_client->setBaseUrl(ConfigManager::instance().metadataUrl());
+    // Initial Data Fetch
+    m_client->setBaseUrl("http://localhost:59881"); // Example EdgeX Metadata URL
     m_client->fetchDeviceServices();
     m_client->fetchDeviceProfiles();
 }
 
-QWizardPage *AddDeviceWizard::createServicePage()
-{
-    QWizardPage *page = new QWizardPage();
+QWizardPage *AddDeviceWizard::createServicePage() {
+    // QWizardPage *page = new QWizardPage();
+    AccessibleWizardPage *page = new AccessibleWizardPage();
     page->setTitle("Select Device Service");
     QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->addWidget(new QLabel("Select the service that will manage this device:"));
-    
     m_serviceCombo = new QComboBox();
+    layout->addWidget(new QLabel("Select the service that will manage this device:"));
     layout->addWidget(m_serviceCombo);
-    layout->addStretch();
     
+    // Validation: Require a selection (index != -1)
+    page->registerField("serviceName*", m_serviceCombo); 
     return page;
 }
 
-QWizardPage *AddDeviceWizard::createProfilePage()
-{
-    QWizardPage *page = new QWizardPage();
+QWizardPage *AddDeviceWizard::createProfilePage() {
+    // QWizardPage *page = new QWizardPage();
+    AccessibleWizardPage *page = new AccessibleWizardPage();
     page->setTitle("Select Device Profile");
     QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->addWidget(new QLabel("Select the profile for this device:"));
-    
     m_profileCombo = new QComboBox();
+    layout->addWidget(new QLabel("Select the profile for this device:"));
     layout->addWidget(m_profileCombo);
-    layout->addStretch();
     
+    page->registerField("profileName*", m_profileCombo);
     return page;
 }
 
-QWizardPage *AddDeviceWizard::createInfoPage()
-{
-    QWizardPage *page = new QWizardPage();
+QWizardPage *AddDeviceWizard::createInfoPage() {
+    // QWizardPage *page = new QWizardPage();
+    AccessibleWizardPage *page = new AccessibleWizardPage();
     page->setTitle("Device Primary Info");
     QFormLayout *layout = new QFormLayout(page);
     
     m_nameEdit = new QLineEdit();
-    layout->addRow("Name:", m_nameEdit);
+    layout->addRow("Name (Required):", m_nameEdit);
+    // MANDATORY FIELD: Wizard disables 'Next' if empty
+    page->registerField("deviceName*", m_nameEdit);
+
     if (m_isEdit) {
         m_nameEdit->setText(m_editData["name"].toString());
-        m_nameEdit->setReadOnly(true); // Name usually cannot be changed in EdgeX
+        m_nameEdit->setReadOnly(true);
     }
     
     m_descEdit = new QLineEdit();
     layout->addRow("Description:", m_descEdit);
-    if (m_isEdit) m_descEdit->setText(m_editData["description"].toString());
     
     m_labelsEdit = new QLineEdit();
     m_labelsEdit->setPlaceholderText("label1, label2");
     layout->addRow("Labels:", m_labelsEdit);
-    if (m_isEdit) {
-        QJsonArray labels = m_editData["labels"].toArray();
-        QStringList joined;
-        for (const auto &l : labels) joined << l.toString();
-        m_labelsEdit->setText(joined.join(", "));
-    }
     
     m_adminStateCombo = new QComboBox();
     m_adminStateCombo->addItems({"UNLOCKED", "LOCKED"});
     layout->addRow("Admin State:", m_adminStateCombo);
-    if (m_isEdit) m_adminStateCombo->setCurrentText(m_editData["adminState"].toString());
     
     return page;
 }
 
-QWizardPage *AddDeviceWizard::createProtocolPage()
-{
-    QWizardPage *page = new QWizardPage();
+QWizardPage *AddDeviceWizard::createProtocolPage() {
+    // QWizardPage *page = new QWizardPage();
+    AccessibleWizardPage *page = new AccessibleWizardPage();
     page->setTitle("Protocols Configuration");
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->addWidget(new QLabel("Define protocols in JSON format:"));
@@ -101,56 +104,47 @@ QWizardPage *AddDeviceWizard::createProtocolPage()
         m_protocolEdit->setPlainText("{\n  \"other\": {\n    \"Address\": \"localhost\",\n    \"Port\": \"1234\"\n  }\n}");
     }
     layout->addWidget(m_protocolEdit);
-    
     return page;
 }
 
-void AddDeviceWizard::onServicesReceived(const QJsonArray &services)
-{
+bool AddDeviceWizard::validateCurrentPage() {
+    // Only validate when leaving the Protocol Page (the last page)
+    if (currentPage() == page(3)) { 
+        QJsonParseError error;
+        QJsonDocument doc = QJsonDocument::fromJson(m_protocolEdit->toPlainText().toUtf8(), &error);
+        
+        if (error.error != QJsonParseError::NoError) {
+            QMessageBox::warning(this, "JSON Error", "The protocol configuration is not valid JSON:\n" + error.errorString());
+            return false; // Stay on page
+        }
+    }
+    return true; // Allow transition
+}
+
+void AddDeviceWizard::onServicesReceived(const QJsonArray &services) {
     m_serviceCombo->clear();
-    for (const auto &v : services) {
-        m_serviceCombo->addItem(v.toObject()["name"].toString());
-    }
-    if (m_isEdit) {
-        m_serviceCombo->setCurrentText(m_editData["serviceName"].toString());
-    }
+    for (const auto &v : services) m_serviceCombo->addItem(v.toObject()["name"].toString());
 }
 
-void AddDeviceWizard::onProfilesReceived(const QJsonArray &profiles)
-{
+void AddDeviceWizard::onProfilesReceived(const QJsonArray &profiles) {
     m_profileCombo->clear();
-    for (const auto &v : profiles) {
-        m_profileCombo->addItem(v.toObject()["name"].toString());
-    }
-    if (m_isEdit) {
-        m_profileCombo->setCurrentText(m_editData["profileName"].toString());
-    }
+    for (const auto &v : profiles) m_profileCombo->addItem(v.toObject()["name"].toString());
 }
 
-QJsonObject AddDeviceWizard::deviceData() const
-{
+QJsonObject AddDeviceWizard::deviceData() const {
     QJsonObject device;
     device["apiVersion"] = "v3";
     
-    QJsonObject deviceObj;
-    deviceObj["name"] = m_nameEdit->text();
-    deviceObj["description"] = m_descEdit->text();
-    deviceObj["adminState"] = m_adminStateCombo->currentText();
-    deviceObj["operatingState"] = "UP";
-    deviceObj["serviceName"] = m_serviceCombo->currentText();
-    deviceObj["profileName"] = m_profileCombo->currentText();
+    QJsonObject dObj;
+    dObj["name"] = m_nameEdit->text();
+    dObj["description"] = m_descEdit->text();
+    dObj["serviceName"] = m_serviceCombo->currentText();
+    dObj["profileName"] = m_profileCombo->currentText();
+    dObj["adminState"] = m_adminStateCombo->currentText();
     
-    QStringList labels = m_labelsEdit->text().split(',', Qt::SkipEmptyParts);
-    QJsonArray labelsArr;
-    for (const auto &l : labels) labelsArr.append(l.trimmed());
-    deviceObj["labels"] = labelsArr;
+    // Protocol Parsing (guaranteed valid by validateCurrentPage)
+    dObj["protocols"] = QJsonDocument::fromJson(m_protocolEdit->toPlainText().toUtf8()).object();
     
-    // Parse protocol JSON
-    QJsonDocument doc = QJsonDocument::fromJson(m_protocolEdit->toPlainText().toUtf8());
-    if (doc.isObject()) {
-        deviceObj["protocols"] = doc.object();
-    }
-    
-    device["device"] = deviceObj;
+    device["device"] = dObj;
     return device;
 }

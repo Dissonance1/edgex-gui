@@ -9,8 +9,8 @@ class CoreDataClient : public EdgexClientBase
 public:
     explicit CoreDataClient(QObject *parent = nullptr);
 
-    void fetchEvents(const QString &deviceName = QString(), int limit = 20);
-    void fetchReadings(const QString &deviceName = QString(), int limit = 20);
+    void fetchEvents(const QString &deviceName = QString(), int limit = 200);
+    void fetchReadings(const QString &deviceName = QString(), int limit = 200);
     void deleteEvent(const QString &id);
     void deleteAllEvents();
     void deleteAllReadings();

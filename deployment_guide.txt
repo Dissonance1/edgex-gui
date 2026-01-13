@@ -1,0 +1,46 @@
+EdgeX-GUI arm64 Deployment Guide
+===============================
+
+1. WHAT WAS DONE
+----------------
+- Built the EdgeX-GUI application for arm64 architecture.
+- Resolved dependency issues: Fixed the "t64" library mismatch by building natively on the Ubuntu 22.04 device.
+- Theme & Logo Fix: Bundled the theme (ModernTheme.qss) and the logo (honeycomblogo.png) into the binary using Qt Resource System (:/.qrc). This ensures the UI looks correct regardless of where the app is started.
+- Desktop Integration: Created a desktop shortcut with the Honeycomb icon on the Aetina device.
+
+2. HOW TO INSTALL THE .DEB FILE
+------------------------------
+If you have the .deb file (edgex-gui-1.0.0-Linux.deb), run the following command on the ARM device:
+
+   sudo apt update
+   sudo apt install ./edgex-gui-1.0.0-Linux.deb
+
+Using 'apt' instead of 'dpkg -i' is recommended because 'apt' will automatically download any missing Qt6 dependencies from the internet.
+
+3. HOW TO RUN THE APPLICATION
+-----------------------------
+A. From the Desktop:
+   Double-click the "EdgeX GUI" icon on your desktop.
+
+B. From the Terminal:
+   Run the command:
+   edgex-qt-ui
+
+C. Run remotely via SSH:
+   If you want to launch the app on the device's screen while connected via SSH, run:
+   DISPLAY=:0 edgex-qt-ui
+
+4. BUILD FROM SOURCE (ON THE DEVICE)
+-----------------------------------
+If you need to rebuild the app on the device itself:
+   cd ~/edgex-gui-build
+   mkdir -p build && cd build
+   cmake ..
+   make -j4
+   sudo make install
+
+5. FILE PATHS
+-------------
+- Binary: /usr/bin/edgex-qt-ui
+- Desktop Icon: ~/Desktop/edgex-gui.desktop
+- Icon Image: /usr/share/pixmaps/edgex-gui.png

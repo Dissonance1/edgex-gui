@@ -11,6 +11,7 @@
 // #include "SchedulerView.h"
 #include "RulesEngineView.h"
 // #include "AppServicesView.h"
+#include "DataIngestionServer.h"
 
 #include "SettingsDialog.h"
 #include "ConfigManager.h"
@@ -23,6 +24,23 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "MainWindow constructor start";
     ui->setupUi(this);
     ConfigManager::instance().load();
+    // Start Data Ingestion Server (Port 4000)
+    m_ingestionServer = new DataIngestionServer(this);
+    if (m_ingestionServer->listen(4000)) {
+        qInfo() << "EdgeX Ingestion Proxy listening on port 4000";
+    } else {
+        qWarning() << "Failed to start Ingestion Proxy on port 4000";
+    }
+
+    // Set Logo Pixmap explicitly
+    // Set Logo Pixmap explicitly
+    QPixmap logo(":/resources/honeycomblogo.png");
+    if (logo.isNull()) {
+        qDebug() << "Failed to load logo from :/resources/honeycomblogo.png";
+    } else {
+        ui->logoLabel->setPixmap(logo.scaled(200, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        qDebug() << "Logo loaded successfully from resources";
+    }
     
     // Setup Central Stack (Programmatic additions to UI-defined container)
     ui->centralStack->addWidget(new DashboardView());      // 0
@@ -37,9 +55,10 @@ MainWindow::MainWindow(QWidget *parent)
     ui->centralStack->addWidget(new RulesEngineView());    // 9
 
     setupNavigation();
-    createMenus();
+    // createMenus(); // User requested to remove top menus
     
     connect(ui->navPanel, &QListWidget::currentRowChanged, this, &MainWindow::onNavItemChanged);
+    connect(ui->btnSettings, &QPushButton::clicked, this, &MainWindow::showSettings);
     qDebug() << "MainWindow constructor end";
 }
 
@@ -51,7 +70,8 @@ MainWindow::~MainWindow()
 void MainWindow::setupNavigation()
 {
     // Items are now defined in MainWindow.ui for easier editing in Qt Designer
-    ui->navPanel->setCurrentRow(1); // Default to Devices
+    ui->navPanel->setCurrentRow(0); // Default to Dashboard (index 0)
+    ui->centralStack->setCurrentIndex(0);
 }
 
 void MainWindow::createMenus()

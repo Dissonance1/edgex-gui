@@ -44,6 +44,16 @@ void RulesClient::createRule(const QString &id, const QString &json)
     });
 }
 
+void RulesClient::updateRule(const QString &id, const QString &json)
+{
+    QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    QJsonObject obj = doc.object();
+    
+    put("rules/" + id, obj, [this](const QByteArray &data, bool success, const QString &error) {
+        emit operationCompleted(success, success ? "Rule updated successfully" : error);
+    });
+}
+
 void RulesClient::deleteRule(const QString &id)
 {
     deleteRequest("rules/" + id, [this](const QByteArray &data, bool success, const QString &error) {
@@ -63,6 +73,11 @@ void RulesClient::stopRule(const QString &id)
     post("rules/" + id + "/stop", QJsonObject(), [this](const QByteArray &data, bool success, const QString &error) {
         emit operationCompleted(success, success ? "Rule stopped" : error);
     });
+}
+
+void RulesClient::fetchRule(const QString &id)
+{
+    get("rules/" + id);
 }
 
 void RulesClient::fetchRuleStatus(const QString &id)
@@ -88,6 +103,9 @@ void RulesClient::get(const QString &path)
             else if (path.startsWith("rules/") && path.endsWith("/status")) {
                 QString id = path.section('/', 1, 1);
                 emit ruleStatusReceived(id, doc.object());
+            } else if (path.startsWith("rules/")) {
+                QString id = path.section('/', 1, 1);
+                emit ruleReceived(id, doc.object());
             }
         }
         reply->deleteLater();

@@ -10,24 +10,21 @@ int main(int argc, char *argv[])
     a.setApplicationName("EdgeX Qt Console");
     a.setOrganizationName("EdgeX-UI");
 
-    // Load Theme
-    QFile file("src/ModernTheme.qss");
-    if (!file.open(QFile::ReadOnly)) {
-        // Try current directory (deployment)
-        file.setFileName("ModernTheme.qss");
-        if (!file.open(QFile::ReadOnly)) {
-             // Fallback for build dir structure
-            file.setFileName("../src/ModernTheme.qss");
-            file.open(QFile::ReadOnly);
-        }
-    }
-    
-    if (file.isOpen()) {
+    // Load Theme from Resources
+    QFile file(":/ModernTheme.qss");
+    if (file.open(QFile::ReadOnly)) {
         QString styleSheet = QLatin1String(file.readAll());
         a.setStyleSheet(styleSheet);
-        qDebug() << "Theme loaded successfully";
+        qDebug() << "Theme loaded successfully from resources";
     } else {
-        qDebug() << "Failed to load theme";
+        qDebug() << "Failed to load theme from resources, trying local file...";
+        QFile localFile("ModernTheme.qss");
+        if (localFile.open(QFile::ReadOnly)) {
+            a.setStyleSheet(QLatin1String(localFile.readAll()));
+            qDebug() << "Theme loaded from local file";
+        } else {
+            qDebug() << "Failed to load theme completely";
+        }
     }
 
     MainWindow w;

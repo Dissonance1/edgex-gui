@@ -16,9 +16,11 @@ public:
     void createStream(const QString &sql);
     void deleteStream(const QString &streamName);
     void createRule(const QString &id, const QString &json);
+    void updateRule(const QString &id, const QString &json);
     void deleteRule(const QString &id);
     void startRule(const QString &id);
     void stopRule(const QString &id);
+    void fetchRule(const QString &id);
     void fetchRuleStatus(const QString &id);
 
 private:
@@ -27,6 +29,7 @@ private:
 signals:
     void streamsReceived(const QJsonArray &streams);
     void rulesReceived(const QJsonArray &rules);
+    void ruleReceived(const QString &id, const QJsonObject &rule);
     void ruleStatusReceived(const QString &id, const QJsonObject &status);
     void operationCompleted(bool success, const QString &message);
 };

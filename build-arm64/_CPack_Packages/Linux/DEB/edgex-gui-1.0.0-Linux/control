@@ -1,0 +1,10 @@
+Architecture: arm64
+Depends: libqt6widgets6 (>= 6.2.4), libqt6network6 (>= 6.2.4), libqt6core6 (>= 6.2.4), libc6 (>= 2.34), libstdc++6 (>= 11)
+Description: Modern GUI for EdgeX Foundry
+Maintainer: EdgeX Foundry <support@example.com>
+Package: edgex-gui
+Priority: optional
+Section: utils
+Version: 1.0.0
+Installed-Size: 1453
+

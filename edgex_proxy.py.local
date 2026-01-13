@@ -1,0 +1,45 @@
+import http.server
+import urllib.request
+import logging
+import json
+
+logging.basicConfig(level=logging.INFO)
+
+class ProxyHandler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        logging.info(f"Proxying POST to {self.path}")
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length)
+        
+        # edgex-ui-go proxy behavior:
+        # http://localhost:4000/core-data/api/v3/event/face_recog/_Face-recog/all
+        # -> http://localhost:59880/api/v3/event/face_recog/_Face-recog/all
+        
+        target_path = self.path
+        if target_path.startswith("/core-data"):
+            target_path = target_path[10:] # remove /core-data
+            
+        target_url = f"http://localhost:59880{target_path}"
+        logging.info(f"Forwarding to: {target_url}")
+        
+        req = urllib.request.Request(target_url, data=body, method="POST")
+        for key, value in self.headers.items():
+            if key.lower() not in ["host", "content-length"]:
+                req.add_header(key, value)
+        
+        try:
+            with urllib.request.urlopen(req) as response:
+                self.send_response(response.status)
+                for key, value in response.getheaders():
+                    self.send_header(key, value)
+                self.end_headers()
+                self.wfile.write(response.read())
+        except Exception as e:
+            logging.error(f"Proxy error: {e}")
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(str(e).encode())
+
+print("Starting EdgeX Proxy on port 4000 (Forwarding to 59880)...")
+httpd = http.server.HTTPServer(("0.0.0.0", 4000), ProxyHandler)
+httpd.serve_forever()

@@ -3667,7 +3667,6 @@ CMakeFiles/edgex-qt-ui.dir/edgex-qt-ui_autogen/mocs_compilation.cpp.o: edgex-qt-
 
 CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp \
   /home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.h \
-  /home/amit/src/edgex/edgex-gui/src/ConfigManager.h \
   /home/amit/src/edgex/edgex-gui/src/EdgexClientBase.h \
   /home/amit/src/edgex/edgex-gui/src/MetadataClient.h \
   /usr/include/alloca.h \
@@ -3687,14 +3686,11 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/bits/allocator.h \
   /usr/include/c++/13/bits/atomic_base.h \
   /usr/include/c++/13/bits/atomic_lockfree_defines.h \
-  /usr/include/c++/13/bits/basic_ios.h \
-  /usr/include/c++/13/bits/basic_ios.tcc \
   /usr/include/c++/13/bits/basic_string.h \
   /usr/include/c++/13/bits/basic_string.tcc \
   /usr/include/c++/13/bits/char_traits.h \
   /usr/include/c++/13/bits/charconv.h \
   /usr/include/c++/13/bits/chrono.h \
-  /usr/include/c++/13/bits/codecvt.h \
   /usr/include/c++/13/bits/concept_check.h \
   /usr/include/c++/13/bits/cpp_type_traits.h \
   /usr/include/c++/13/bits/cxxabi_forced.h \
@@ -3704,10 +3700,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/bits/exception.h \
   /usr/include/c++/13/bits/exception_defines.h \
   /usr/include/c++/13/bits/exception_ptr.h \
-  /usr/include/c++/13/bits/fs_dir.h \
-  /usr/include/c++/13/bits/fs_fwd.h \
-  /usr/include/c++/13/bits/fs_ops.h \
-  /usr/include/c++/13/bits/fs_path.h \
   /usr/include/c++/13/bits/functexcept.h \
   /usr/include/c++/13/bits/functional_hash.h \
   /usr/include/c++/13/bits/hash_bytes.h \
@@ -3715,15 +3707,9 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/bits/hashtable_policy.h \
   /usr/include/c++/13/bits/invoke.h \
   /usr/include/c++/13/bits/ios_base.h \
-  /usr/include/c++/13/bits/istream.tcc \
   /usr/include/c++/13/bits/list.tcc \
   /usr/include/c++/13/bits/locale_classes.h \
   /usr/include/c++/13/bits/locale_classes.tcc \
-  /usr/include/c++/13/bits/locale_conv.h \
-  /usr/include/c++/13/bits/locale_facets.h \
-  /usr/include/c++/13/bits/locale_facets.tcc \
-  /usr/include/c++/13/bits/locale_facets_nonio.h \
-  /usr/include/c++/13/bits/locale_facets_nonio.tcc \
   /usr/include/c++/13/bits/localefwd.h \
   /usr/include/c++/13/bits/memory_resource.h \
   /usr/include/c++/13/bits/memoryfwd.h \
@@ -3731,13 +3717,11 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/bits/nested_exception.h \
   /usr/include/c++/13/bits/new_allocator.h \
   /usr/include/c++/13/bits/node_handle.h \
-  /usr/include/c++/13/bits/ostream.tcc \
   /usr/include/c++/13/bits/ostream_insert.h \
   /usr/include/c++/13/bits/parse_numbers.h \
   /usr/include/c++/13/bits/postypes.h \
   /usr/include/c++/13/bits/predefined_ops.h \
   /usr/include/c++/13/bits/ptr_traits.h \
-  /usr/include/c++/13/bits/quoted_string.h \
   /usr/include/c++/13/bits/range_access.h \
   /usr/include/c++/13/bits/refwrap.h \
   /usr/include/c++/13/bits/requires_hosted.h \
@@ -3745,7 +3729,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/bits/shared_ptr_atomic.h \
   /usr/include/c++/13/bits/shared_ptr_base.h \
   /usr/include/c++/13/bits/specfun.h \
-  /usr/include/c++/13/bits/sstream.tcc \
   /usr/include/c++/13/bits/std_abs.h \
   /usr/include/c++/13/bits/std_function.h \
   /usr/include/c++/13/bits/stl_algo.h \
@@ -3785,7 +3768,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/chrono \
   /usr/include/c++/13/clocale \
   /usr/include/c++/13/cmath \
-  /usr/include/c++/13/codecvt \
   /usr/include/c++/13/compare \
   /usr/include/c++/13/cstddef \
   /usr/include/c++/13/cstdint \
@@ -3794,7 +3776,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/cstring \
   /usr/include/c++/13/ctime \
   /usr/include/c++/13/cwchar \
-  /usr/include/c++/13/cwctype \
   /usr/include/c++/13/debug/assertions.h \
   /usr/include/c++/13/debug/debug.h \
   /usr/include/c++/13/exception \
@@ -3805,30 +3786,23 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/c++/13/ext/numeric_traits.h \
   /usr/include/c++/13/ext/string_conversions.h \
   /usr/include/c++/13/ext/type_traits.h \
-  /usr/include/c++/13/filesystem \
   /usr/include/c++/13/functional \
   /usr/include/c++/13/initializer_list \
-  /usr/include/c++/13/iomanip \
-  /usr/include/c++/13/ios \
   /usr/include/c++/13/iosfwd \
-  /usr/include/c++/13/istream \
   /usr/include/c++/13/iterator \
   /usr/include/c++/13/limits \
   /usr/include/c++/13/list \
-  /usr/include/c++/13/locale \
   /usr/include/c++/13/map \
   /usr/include/c++/13/memory \
   /usr/include/c++/13/new \
   /usr/include/c++/13/numeric \
   /usr/include/c++/13/optional \
-  /usr/include/c++/13/ostream \
   /usr/include/c++/13/pstl/execution_defs.h \
   /usr/include/c++/13/pstl/glue_algorithm_defs.h \
   /usr/include/c++/13/pstl/glue_memory_defs.h \
   /usr/include/c++/13/pstl/glue_numeric_defs.h \
   /usr/include/c++/13/pstl/pstl_config.h \
   /usr/include/c++/13/ratio \
-  /usr/include/c++/13/sstream \
   /usr/include/c++/13/stdexcept \
   /usr/include/c++/13/stdlib.h \
   /usr/include/c++/13/streambuf \
@@ -3860,7 +3834,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/errno.h \
   /usr/include/features-time64.h \
   /usr/include/features.h \
-  /usr/include/libintl.h \
   /usr/include/limits.h \
   /usr/include/linux/errno.h \
   /usr/include/linux/limits.h \
@@ -3876,7 +3849,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/strings.h \
   /usr/include/time.h \
   /usr/include/wchar.h \
-  /usr/include/wctype.h \
   /usr/include/x86_64-linux-gnu/asm/errno.h \
   /usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h \
   /usr/include/x86_64-linux-gnu/bits/byteswap.h \
@@ -3950,7 +3922,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/x86_64-linux-gnu/bits/waitflags.h \
   /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
   /usr/include/x86_64-linux-gnu/bits/wchar.h \
-  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
   /usr/include/x86_64-linux-gnu/bits/wordsize.h \
   /usr/include/x86_64-linux-gnu/bits/xopen_lim.h \
   /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h \
@@ -3958,18 +3929,13 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h \
   /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h \
   /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h \
-  /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h \
-  /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h \
   /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h \
   /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h \
   /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h \
-  /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h \
   /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h \
-  /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
   /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
   /usr/include/x86_64-linux-gnu/gnu/stubs.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QByteArray \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/QDir \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QFlags \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QIODevice \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QJsonArray \
@@ -3978,9 +3944,7 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QList \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QMetaType \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QObject \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/QSettings \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QSharedDataPointer \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/QStandardPaths \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QString \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QUrl \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/QVariant \
@@ -4014,10 +3978,6 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qdatastream.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qdatetime.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qdebug.h \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/qdir.h \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/qfile.h \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/qfiledevice.h \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/qfileinfo.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qflags.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qforeach.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qgenericatomic.h \
@@ -4057,13 +4017,11 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qscopedpointer.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qscopeguard.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qset.h \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/qsettings.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qshareddata.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qshareddata_impl.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qsharedpointer.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qsharedpointer_impl.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qsize.h \
-  /usr/include/x86_64-linux-gnu/qt6/QtCore/qstandardpaths.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qstring.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qstringalgorithms.h \
   /usr/include/x86_64-linux-gnu/qt6/QtCore/qstringconverter_base.h \
@@ -4146,6 +4104,7 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QLabel \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QLayout \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QLineEdit \
+  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QMessageBox \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QTextEdit \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QVBoxLayout \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/QWizard \
@@ -4163,6 +4122,7 @@ CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o: /home/amit/src/edgex/edgex
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qlayout.h \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qlayoutitem.h \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qlineedit.h \
+  /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qmessagebox.h \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qrubberband.h \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qsizepolicy.h \
   /usr/include/x86_64-linux-gnu/qt6/QtWidgets/qslider.h \
@@ -19888,21 +19848,17 @@ edgex-qt-ui_autogen/include/ui_DashboardView.h:
 
 /usr/include/x86_64-linux-gnu/qt6/QtGui/qinputmethod.h:
 
-/usr/include/x86_64-linux-gnu/qt6/QtCore/qcoreapplication.h:
-
-/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qfiledialog.h:
-
-/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qformlayout.h:
-
-/usr/include/x86_64-linux-gnu/qt6/QtWidgets/QLayout:
-
 /usr/include/x86_64-linux-gnu/qt6/QtCore/qstandardpaths.h:
 
 /usr/include/x86_64-linux-gnu/qt6/QtCore/qsettings.h:
 
-/usr/include/x86_64-linux-gnu/qt6/QtCore/qfileinfo.h:
+/usr/include/x86_64-linux-gnu/qt6/QtCore/qcoreapplication.h:
 
 /usr/include/x86_64-linux-gnu/qt6/QtCore/QStandardPaths:
+
+/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qfiledialog.h:
+
+/usr/include/x86_64-linux-gnu/qt6/QtCore/qfileinfo.h:
 
 /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h:
 
@@ -19921,6 +19877,10 @@ edgex-qt-ui_autogen/include/ui_DashboardView.h:
 /usr/include/c++/13/bits/fs_dir.h:
 
 /usr/include/c++/13/bits/codecvt.h:
+
+/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qformlayout.h:
+
+/usr/include/x86_64-linux-gnu/qt6/QtWidgets/QLayout:
 
 /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h:
 

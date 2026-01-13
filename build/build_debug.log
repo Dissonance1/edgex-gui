@@ -1,0 +1,30 @@
+[  0%] Built target edgex-qt-ui_autogen_timestamp_deps
+[  2%] Built target edgex-qt-ui_autogen
+[  4%] Building CXX object CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o
+[01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp:[m[K In member function ‘[01m[KQWizardPage* AddDeviceWizard::[01;32m[KcreateServicePage[m[K()[m[K’:
+[01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp:39:24:[m[K [01;31m[Kerror: [m[K‘[01m[Kvoid QWizardPage::[01;32m[KregisterField[m[K(const QString&, QWidget*, const char*, const char*)[m[K’ is protected within this context
+   39 |     [01;31m[Kpage->registerField("serviceName*", m_serviceCombo)[m[K;
+      |     [01;31m[K~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[m[K
+In file included from [01m[K/usr/include/x86_64-linux-gnu/qt6/QtWidgets/QWizard:1[m[K,
+                 from [01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.h:4[m[K,
+                 from [01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp:1[m[K:
+[01m[K/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qwizard.h:211:10:[m[K [01;36m[Knote: [m[Kdeclared protected here
+  211 |     void [01;36m[KregisterField[m[K(const QString &name, QWidget *widget, const char *property = nullptr,
+      |          [01;36m[K^~~~~~~~~~~~~[m[K
+[01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp:[m[K In member function ‘[01m[KQWizardPage* AddDeviceWizard::[01;32m[KcreateProfilePage[m[K()[m[K’:
+[01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp:51:24:[m[K [01;31m[Kerror: [m[K‘[01m[Kvoid QWizardPage::[01;32m[KregisterField[m[K(const QString&, QWidget*, const char*, const char*)[m[K’ is protected within this context
+   51 |     [01;31m[Kpage->registerField("profileName*", m_profileCombo)[m[K;
+      |     [01;31m[K~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[m[K
+[01m[K/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qwizard.h:211:10:[m[K [01;36m[Knote: [m[Kdeclared protected here
+  211 |     void [01;36m[KregisterField[m[K(const QString &name, QWidget *widget, const char *property = nullptr,
+      |          [01;36m[K^~~~~~~~~~~~~[m[K
+[01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp:[m[K In member function ‘[01m[KQWizardPage* AddDeviceWizard::[01;32m[KcreateInfoPage[m[K()[m[K’:
+[01m[K/home/amit/src/edgex/edgex-gui/src/AddDeviceWizard.cpp:63:24:[m[K [01;31m[Kerror: [m[K‘[01m[Kvoid QWizardPage::[01;32m[KregisterField[m[K(const QString&, QWidget*, const char*, const char*)[m[K’ is protected within this context
+   63 |     [01;31m[Kpage->registerField("deviceName*", m_nameEdit)[m[K;
+      |     [01;31m[K~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~[m[K
+[01m[K/usr/include/x86_64-linux-gnu/qt6/QtWidgets/qwizard.h:211:10:[m[K [01;36m[Knote: [m[Kdeclared protected here
+  211 |     void [01;36m[KregisterField[m[K(const QString &name, QWidget *widget, const char *property = nullptr,
+      |          [01;36m[K^~~~~~~~~~~~~[m[K
+make[2]: *** [CMakeFiles/edgex-qt-ui.dir/build.make:104: CMakeFiles/edgex-qt-ui.dir/src/AddDeviceWizard.cpp.o] Error 1
+make[1]: *** [CMakeFiles/Makefile2:86: CMakeFiles/edgex-qt-ui.dir/all] Error 2
+make: *** [Makefile:91: all] Error 2

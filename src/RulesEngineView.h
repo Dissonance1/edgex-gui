@@ -23,12 +23,14 @@ private slots:
     void refresh();
     void onStreamsReceived(const QJsonArray &streams);
     void onRulesReceived(const QJsonArray &rules);
+    void onRuleReceived(const QString &id, const QJsonObject &rule);
     void onRuleStatusReceived(const QString &id, const QJsonObject &status);
     void onOperationCompleted(bool success, const QString &message);
     
     void onAddStream();
     void onDeleteStream();
     void onAddRule();
+    void onEditRule();
     void onDeleteRule();
     void onStartRule();
     void onStopRule();
@@ -39,6 +41,9 @@ private:
     Ui::RulesEngineView *ui;
     RulesClient *m_client;
     QMap<QString, QJsonObject> m_rulesData;
+    QString m_pendingRuleId;
+    bool m_isEditing;
+    bool m_isViewingSql;
 };
 
 #endif // RULESENGINEVIEW_H

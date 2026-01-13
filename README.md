@@ -3,17 +3,22 @@
 A modern, responsive C++ Qt application for managing EdgeX Foundry instances with a premium Honeycomb-inspired theme.
 
 ## Features
-- **Dynamic Service Discovery**: Real-time monitoring of all EdgeX services via Consul registry.
-- **Premium Aesthetics**: Honeycomb Navy (#023356) and Orange (#F9942A) palette with Montserrat typography.
-- **Service Management**: Dashboard, Device Management, Rules Engine, and more.
+- **Dynamic Service Discovery**: Integrates with **Consul** to automatically discover and monitor all running EdgeX services.
+- **EdgeX V3 Parity**:
+  - **Notifications**: Severity-based monitoring and multi-channel subscription support.
+  - **Rules Engine**: SQL-based stream processing with real-time metrics (In/Out/Exceptions).
+- **Premium Aesthetics**: High-fidelity UI using the Honeycomb palette (#023356, #F9942A) and **Montserrat** typography.
+- **Responsive Management**: Full CRUD operations for Devices, Profiles, and Subscriptions.
 
 ## Prerequisites
 
 Ensure you have the following installed:
-- **Qt 5.15+ or Qt 6** (Widgets, Network, Concurrent modules)
+- **Qt 5.15+ or Qt 6** (Modules: Widgets, Network, Concurrent)
 - **CMake 3.10+**
 - **C++17 Compiler** (GCC, Clang, or MSVC)
-- **Consul** (Required for service discovery, usually running at `http://localhost:8500`)
+- **Consul**: Required for service discovery (Default: `http://localhost:8500`)
+
+---
 
 ## How to Build
 
@@ -24,47 +29,51 @@ Follow these steps to build the application from source:
    cd edgex-gui
    ```
 
-2. **Create and enter the build directory:**
+2. **Setup Build Environment:**
    ```bash
    mkdir build && cd build
    ```
 
-3. **Configure the project with CMake:**
+3. **Configure & Compile:**
    ```bash
    cmake ..
-   ```
-
-4. **Build the application:**
-   ```bash
    make -j$(nproc)
    ```
 
+---
+
 ## How to Run
 
-After a successful build, you can run the application using the following commands:
-
 ### Linux / WSL
-If you are using WSL, ensure you have an X-Server or Wayland compositor running.
+If using WSL, ensure an X-Server (like GWSL or VcXsrv) is running on your host.
 
 ```bash
-export DISPLAY=:0  # Adjust if your display index is different
-cd build
-./bin/edgex-qt-ui
+# In the project root:
+export DISPLAY=:0
+./build/bin/edgex-qt-ui
 ```
 
 ### Windows
-Navigate to the `build/bin` directory and run:
+Navigate to the `build\bin` folder and execute:
 ```powershell
 .\edgex-qt-ui.exe
 ```
 
+---
+
+## Troubleshooting
+
+- **"No such file or directory" when running**: Ensure you are in the correct directory. If you are already inside `build`, use `./bin/edgex-qt-ui`.
+- **Display Errors (WSL)**: If the app fails to open, verify your `DISPLAY` variable. Use `export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0` if `:0` doesn't work.
+- **Consul Connection**: If System Status is empty, ensure Consul is running and accessible at the URL defined in **Settings**.
+
 ## Configuration
 
-The application stores settings in a `config.json` file located in the user's application config directory. You can manually adjust the service URLs or the Consul registry URL there, or use the **Settings** dialog within the app.
-
-- **Default Registry URL**: `http://localhost:8500`
+The application stores settings in a `config.json` file.
+- **Linux**: `~/.config/edgex-qt-ui/config.json`
+- **Windows**: `AppData\Local\edgex-qt-ui\config.json`
 
 ## Interface Guidelines
 
-- **Typography**: The app uses **Montserrat**. Ensure this font is installed on your system for the best experience.
-- **Logo**: The sidebar logo is located in `src/resources/honeycomblogo.png` and is embedded via the Qt Resource System (`.qrc`).
+- **Font**: Montserrat (Included in system or available via Google Fonts).
+- **Branding**: Logos and styles are maintained in `src/resources/` and `src/ModernTheme.qss`.

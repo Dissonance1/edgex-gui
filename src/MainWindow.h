@@ -5,6 +5,8 @@
 #include <QListWidget>
 #include <QStackedWidget>
 
+class DataIngestionServer;
+
 namespace Ui {
 class MainWindow;
 }
@@ -30,6 +32,8 @@ private:
     // Pointers to widgets now managed by UI, but we might keep convenience pointers or use ui-> directly
     // m_navPanel is now ui->navPanel
     // m_centralStack is now ui->centralStack
+    
+    DataIngestionServer *m_ingestionServer;
 };
 
 #endif // MAINWINDOW_H

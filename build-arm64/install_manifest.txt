@@ -1,0 +1,4 @@
+/usr/bin/edgex-qt-ui
+/usr/bin/resources/logo.png
+/usr/bin/resources/honeycomblogo.png
+/usr/bin/ModernTheme.qss

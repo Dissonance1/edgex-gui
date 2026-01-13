@@ -14,13 +14,13 @@
 class AddJsonDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit AddJsonDialog(const QString &title, const QString &placeholder = "{}", QWidget *parent = nullptr)
-        : QDialog(parent) {
+    explicit AddJsonDialog(const QString &title, const QString &placeholder = "{}", QWidget *parent = nullptr, bool validateJson = true)
+        : QDialog(parent), m_validateJson(validateJson) {
         setWindowTitle(title);
         resize(500, 400);
 
         QVBoxLayout *layout = new QVBoxLayout(this);
-        layout->addWidget(new QLabel("Enter JSON Payload:"));
+        layout->addWidget(new QLabel(validateJson ? "Enter JSON Payload:" : "SQL Query Content:"));
 
         m_textEdit = new QPlainTextEdit();
         m_textEdit->setPlainText(placeholder);
@@ -36,10 +36,12 @@ public:
         layout->addLayout(buttons);
 
         connect(btnOk, &QPushButton::clicked, this, [this]() {
-            QJsonDocument doc = QJsonDocument::fromJson(m_textEdit->toPlainText().toUtf8());
-            if (doc.isNull()) {
-                QMessageBox::warning(this, "Invalid JSON", "Please enter a valid JSON object.");
-                return;
+            if (m_validateJson) {
+                QJsonDocument doc = QJsonDocument::fromJson(m_textEdit->toPlainText().toUtf8());
+                if (doc.isNull()) {
+                    QMessageBox::warning(this, "Invalid JSON", "Please enter a valid JSON object.");
+                    return;
+                }
             }
             accept();
         });
@@ -52,6 +54,7 @@ public:
 
 private:
     QPlainTextEdit *m_textEdit;
+    bool m_validateJson;
 };
 
 #endif // ADDJSONDIALOG_H

@@ -216,3 +216,49 @@ QJsonObject AddRuleDialog::ruleData() const
 QString AddRuleDialog::id() const { return m_idEdit->text(); }
 
 void AddRuleDialog::onSinkTypeChanged(int index) { m_sinkStack->setCurrentIndex(index); }
+
+void AddRuleDialog::setRuleData(const QString &id, const QJsonObject &data)
+{
+    m_idEdit->setText(id);
+    m_idEdit->setReadOnly(true); // Don't allow changing the ID during edit
+    m_sqlEdit->setPlainText(data["sql"].toString());
+
+    // Options
+    QJsonObject opts = data["options"].toObject();
+    m_debugCheck->setChecked(opts["debug"].toBool());
+    m_logPlanCheck->setChecked(opts["logPlan"].toBool());
+    m_sendMetaCheck->setChecked(opts["sendMetaToSink"].toBool());
+    m_qosSpin->setValue(opts["qos"].toInt());
+    m_checkpointSpin->setValue(opts["checkpointInterval"].toInt());
+
+    // Sinks
+    QJsonArray actions = data["actions"].toArray();
+    if (!actions.isEmpty()) {
+        QJsonObject firstAction = actions.at(0).toObject();
+        if (firstAction.contains("log")) {
+            m_sinkTypeCombo->setCurrentIndex(0);
+        } else if (firstAction.contains("edgex")) {
+            m_sinkTypeCombo->setCurrentIndex(1);
+            QJsonObject ex = firstAction["edgex"].toObject();
+            m_edgexProtocolCombo->setCurrentText(ex["protocol"].toString());
+            m_edgexHostEdit->setText(ex["host"].toString());
+            m_edgexPortEdit->setText(QString::number(ex["port"].toInt()));
+            m_edgexTopicEdit->setText(ex["topic"].toString());
+            m_edgexMsgTypeCombo->setCurrentText(ex["messageType"].toString());
+        } else if (firstAction.contains("mqtt")) {
+            m_sinkTypeCombo->setCurrentIndex(2);
+            QJsonObject mq = firstAction["mqtt"].toObject();
+            m_mqttBrokerEdit->setText(mq["server"].toString());
+            m_mqttTopicEdit->setText(mq["topic"].toString());
+            m_mqttClientIdEdit->setText(mq["clientId"].toString());
+            m_mqttQosSpin->setValue(mq["qos"].toInt());
+        } else if (firstAction.contains("rest")) {
+            m_sinkTypeCombo->setCurrentIndex(3);
+            QJsonObject rs = firstAction["rest"].toObject();
+            m_restUrlEdit->setText(rs["url"].toString());
+            m_restMethodCombo->setCurrentText(rs["method"].toString());
+        }
+    }
+    
+    setWindowTitle("Edit eKuiper Rule: " + id);
+}

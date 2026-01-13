@@ -1,0 +1,11 @@
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/edgex-qt-ui.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/package.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/package_source.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/edit_cache.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/rebuild_cache.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/list_install_components.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/install.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/install/local.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/install/strip.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/edgex-qt-ui_autogen_timestamp_deps.dir
+/home/amit/src/edgex/edgex-gui/build-arm64/CMakeFiles/edgex-qt-ui_autogen.dir
