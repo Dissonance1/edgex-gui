@@ -1,0 +1,10 @@
+{
+    "sql": "SELECT *, DeviceName FROM EdgeXStream",
+    "actions": [
+        {
+            "log": {
+                "dataTemplate": "[   {     \"apiVersion\": \"v3\",     \"notification\": {       \"category\": \"FaceAlarm\",       \"severity\": \"CRITICAL\",       \"content\": \"Face: {{.confidence}}% exceeds threshold\",       \"sender\": \"EdgeX_Kuiper\",       \"contentType\": \"application/json\",      \"description\": \"Person {{.recognized_names}} detected on device {{.DeviceName}} with high confidence.\",      \"labels\": [\"FaceRecog\", \"ConfidenceAlert\"],       \"status\": \"NEW\"     }   } ]"
+            }
+        }
+    ]
+}

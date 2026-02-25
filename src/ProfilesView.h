@@ -24,6 +24,7 @@ private slots:
     void onProfilesReceived(const QJsonArray &profiles);
     void onSearch(const QString &text);
     void onAddProfile();
+    void onEditProfile();
     void onOperationCompleted(bool success, const QString &message);
 
 private:

@@ -11,6 +11,7 @@
 #include <QJsonObject>
 #include <QLineEdit>
 #include <QTextEdit>
+#include <QPushButton>
 
 class AddRuleDialog : public QDialog
 {
@@ -28,16 +29,21 @@ private:
     void setupUi();
     QWidget* createGeneralTab();
     QWidget* createSinksTab();
-    QWidget* createOptionsTab();
+    QWidget* createRuleOptionsTab();
+    QWidget* createSinkOptionsTab();
 
-    // General
+    // --- General Tab ---
     QLineEdit *m_idEdit;
     QTextEdit *m_sqlEdit;
 
-    // Sinks
+    // --- Sinks Tab ---
     QComboBox *m_sinkTypeCombo;
     QStackedWidget *m_sinkStack;
     
+    // Common Sink Properties (Data Template, etc.)
+    QCheckBox *m_sendSingleCheck;
+    QTextEdit *m_dataTemplateEdit;
+
     // EdgeX Sink Fields
     QComboBox *m_edgexProtocolCombo;
     QLineEdit *m_edgexHostEdit;
@@ -50,17 +56,44 @@ private:
     QLineEdit *m_mqttTopicEdit;
     QLineEdit *m_mqttClientIdEdit;
     QSpinBox *m_mqttQosSpin;
+    QLineEdit *m_mqttUserEdit;
+    QLineEdit *m_mqttPassEdit;
+    QCheckBox *m_mqttRetainedCheck;
 
     // REST Sink Fields
     QLineEdit *m_restUrlEdit;
     QComboBox *m_restMethodCombo;
+    QComboBox *m_restBodyTypeCombo;
+    QSpinBox *m_restTimeoutSpin;
+    QCheckBox *m_restDebugRespCheck;
 
-    // Options
-    QCheckBox *m_debugCheck;
-    QCheckBox *m_logPlanCheck;
-    QCheckBox *m_sendMetaCheck;
+    // Security (Shared by REST/MQTT)
+    QCheckBox *m_insecureSkipVerifyCheck;
+    QLineEdit *m_certPathEdit;
+    QLineEdit *m_privKeyPathEdit;
+    QLineEdit *m_rootCaPathEdit;
+
+    // --- Rule Options Tab ---
+    QCheckBox *m_isEventTimeCheck;
     QSpinBox *m_qosSpin;
+    QSpinBox *m_lateToleranceSpin;
+    QSpinBox *m_concurrencySpin;
+    QSpinBox *m_bufferLengthSpin;
     QSpinBox *m_checkpointSpin;
+    QCheckBox *m_sendMetaCheck;
+    QCheckBox *m_sendErrorCheck;
+
+    // --- Sink Options Tab ---
+    QSpinBox *m_sinkConcurrencySpin;
+    QSpinBox *m_sinkBufferLengthSpin;
+    QSpinBox *m_retryIntervalSpin;
+    QSpinBox *m_retryCountSpin;
+    QSpinBox *m_cacheLengthSpin;
+    QSpinBox *m_cacheSaveIntervalSpin;
+    QCheckBox *m_runAsyncCheck;
+    QCheckBox *m_omitIfEmptyCheck;
+
+    QPushButton *m_btnOk;
 };
 
 #endif // ADDRULEDIALOG_H

@@ -26,6 +26,7 @@ private slots:
     
     // Actions
     void onAddDevice();
+    void onEditDevice();
     // void onViewDevice();
     void onSearch(const QString &text);
 

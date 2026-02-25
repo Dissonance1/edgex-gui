@@ -6,6 +6,7 @@
 #include <QNetworkRequest>
 #include <QUrl>
 #include <QDebug>
+#include <QUuid>
 
 DataIngestionServer::DataIngestionServer(QObject *parent)
     : QObject(parent)
@@ -104,20 +105,39 @@ void DataIngestionServer::processRequest(QTcpSocket* socket, const QByteArray& d
         
         QString requestPath = parts[1];
         
-        if (requestPath.startsWith("/core-data")) {
-             QString forwardingPath = requestPath.mid(10); // Remove "/core-data"
-             QUrl url;
-             
-             // Mimic edgex-ui-go: Pure Transparent Proxy
-             // Strip /core-data and forward exactly as-is to port 59880
-             url = QUrl("http://localhost:59880" + forwardingPath);
-             
-             qInfo() << "Proxying" << requestPath << "->" << url.toString();
-             
-             QNetworkRequest request(url);
-             request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-             
-             QNetworkReply *reply = m_networkManager->post(request, body);
+         if (requestPath.startsWith("/core-data") || requestPath.startsWith("/api/v3/event")) {
+              QString forwardingPath = requestPath;
+              if (requestPath.startsWith("/core-data")) {
+                  forwardingPath = requestPath.mid(10); // Remove "/core-data"
+              }
+              
+              // Smart Correction: Detect if user swapped device/profile in the path
+              // Path format: /api/v3/event/{service}/{profile}/{device}/{source}
+              QStringList segments = forwardingPath.split('/', Qt::SkipEmptyParts);
+              if (segments.size() >= 6 && segments[2] == "event") {
+                  QString prof = segments[4];
+                  QString dev = segments[5];
+                  // If profile starts with '_' it's likely a device name (swapped)
+                  if (prof.startsWith('_') && !dev.startsWith('_')) {
+                      qInfo() << "DataIngestionServer: Detected swapped Device/Profile in path, correcting...";
+                      segments[4] = dev;
+                      segments[5] = prof;
+                      forwardingPath = "/" + segments.join('/');
+                  }
+              }
+
+              QUrl url("http://localhost:59880" + forwardingPath);
+              QByteArray effectiveBody = body;
+              
+              // We pass the body as-is to Core Data, as it now has custom SenML parsing logic.
+              // This makes the proxy truly transparent for these requests.
+
+              qInfo() << "Proxying" << requestPath << "->" << url.toString();
+              
+              QNetworkRequest request(url);
+              request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+              
+              QNetworkReply *reply = m_networkManager->post(request, effectiveBody);
              
              connect(reply, &QNetworkReply::finished, this, [this, reply, socket, url]() {
                 if (socket->state() == QAbstractSocket::ConnectedState) {
@@ -144,32 +164,57 @@ void DataIngestionServer::processRequest(QTcpSocket* socket, const QByteArray& d
 
 QJsonObject DataIngestionServer::translateSenMLToV3(const QJsonArray& senmlData)
 {
-    // Default values
-    QString deviceName = "_Face-recog";
-    QString profileName = "face_recog";
+    // Try to find device and profile from SenML (bn or specifically named entries)
+    QString deviceName = "Unknown";
+    QString profileName = "Unknown";
     QJsonArray readings;
     
+    // First pass to resolve device/profile names
+    for (const auto& itemRef : senmlData) {
+        QJsonObject item = itemRef.toObject();
+        if (item.contains("bn") && deviceName == "Unknown") {
+            deviceName = item["bn"].toString();
+            // Fix Simulation Typo
+            if (deviceName == "_Face-reocg") deviceName = "_Face-recog";
+        }
+        if (item.contains("n") && item["n"].toString() == "DeviceName" && item.contains("vs")) {
+            deviceName = item["vs"].toString();
+            if (deviceName == "_Face-reocg") deviceName = "_Face-recog";
+        }
+        if (item.contains("n") && item["n"].toString() == "ProfileName" && item.contains("vs")) {
+            profileName = item["vs"].toString();
+        }
+    }
+    
+    // If we still don't have a profile name, and device name is known, 
+    // we default profile name to device name or a generic derivation.
+    if (profileName == "Unknown" && deviceName != "Unknown") {
+        profileName = deviceName + "-Profile";
+    }
+    
+    // Second pass to create readings
     for (const auto& itemRef : senmlData) {
         QJsonObject item = itemRef.toObject();
         
-        deviceName = "_Face-recog";
-        if (item.contains("bn")) {
-            QString bn = item["bn"].toString();
-            if (!bn.isEmpty() && bn != "face_recog") {
-                deviceName = bn;
-            }
-        }
-        
         if (item.contains("n")) {
             QString resource = item["n"].toString();
-            if (resource == "DeviceName") continue;
+            if (resource == "DeviceName" || resource == "ProfileName") continue;
             
             QJsonObject reading;
             reading["apiVersion"] = "v3";
+            reading["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
             reading["resourceName"] = resource;
             reading["deviceName"] = deviceName;
             reading["profileName"] = profileName;
-            reading["origin"] = QDateTime::currentDateTime().toMSecsSinceEpoch() * 1000000;
+            
+            // Handle Timestamp (SenML 't' is offset or absolute)
+            qlonglong ts = QDateTime::currentDateTime().toMSecsSinceEpoch() * 1000000;
+            if (item.contains("t")) {
+                double t = item["t"].toDouble();
+                if (t > 1000000000) ts = (qlonglong)(t * 1000000000); // Absolute seconds to nano
+                else if (t > 0) ts += (qlonglong)(t * 1000000000); // Relative offset
+            }
+            reading["origin"] = ts;
             
             QString valStr;
             QString type = "String";
@@ -183,11 +228,15 @@ QJsonObject DataIngestionServer::translateSenMLToV3(const QJsonArray& senmlData)
                     type = "Float32";
                     valStr = QString::number(val);
                 } else {
+                    // Try to guess type or use Float64
                     type = "Float64";
                     valStr = QString::number(val);
                 }
             } else if (item.contains("vs")) {
                 valStr = item["vs"].toString();
+            } else if (item.contains("vb")) {
+                type = "Binary";
+                valStr = item["vb"].toString();
             }
             
             reading["value"] = valStr;
@@ -199,6 +248,7 @@ QJsonObject DataIngestionServer::translateSenMLToV3(const QJsonArray& senmlData)
     
     QJsonObject event;
     event["apiVersion"] = "v3";
+    event["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
     event["deviceName"] = deviceName;
     event["profileName"] = profileName;
     event["origin"] = QDateTime::currentDateTime().toMSecsSinceEpoch() * 1000000;

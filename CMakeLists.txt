@@ -58,7 +58,6 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6widgets6 (>= 6.2.4), libqt6network6 (>= 6.2.4), libqt6core6 (>= 6.2.4), libc6 (>= 2.34), libstdc++6 (>= 11)")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 
 # Set architecture for cross-compilation
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")

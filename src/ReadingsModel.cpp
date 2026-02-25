@@ -40,7 +40,7 @@ QVariant ReadingsModel::data(const QModelIndex &index, int role) const
             case 3: return reading["units"].toString();
             case 4: {
                 qlonglong ts = reading["origin"].toVariant().toLongLong();
-                return QDateTime::fromMSecsSinceEpoch(ts/1000000).toString(); // EdgeX origin is usually nanoseconds
+                return QDateTime::fromMSecsSinceEpoch(ts/1000000).toOffsetFromUtc(19800).toString("yyyy-MM-dd HH:mm:ss"); // EdgeX origin is usually nanoseconds
             }
         }
     }

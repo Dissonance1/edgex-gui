@@ -8,10 +8,9 @@
 #include "EventsReadingsView.h"
 #include "SystemStatusView.h"
 #include "NotificationView.h"
-// #include "SchedulerView.h"
 #include "RulesEngineView.h"
-// #include "AppServicesView.h"
 #include "DataIngestionServer.h"
+#include "NotificationToast.h"
 
 #include "SettingsDialog.h"
 #include "ConfigManager.h"
@@ -43,22 +42,49 @@ MainWindow::MainWindow(QWidget *parent)
     }
     
     // Setup Central Stack (Programmatic additions to UI-defined container)
-    ui->centralStack->addWidget(new DashboardView());      // 0
+    DashboardView *dashView = new DashboardView();
+    ui->centralStack->addWidget(dashView);      // 0
     ui->centralStack->addWidget(new DevicesView());        // 1
     ui->centralStack->addWidget(new DeviceServicesView()); // 2
     ui->centralStack->addWidget(new ProfilesView());       // 3
     ui->centralStack->addWidget(new EventsReadingsView()); // 4
     ui->centralStack->addWidget(new SystemStatusView());   // 5
     // ui->centralStack->addWidget(new SchedulerView());      // 6
-    ui->centralStack->addWidget(new NotificationView());   // 7
+    NotificationView *notifView = new NotificationView();
+    ui->centralStack->addWidget(notifView);
+    connect(this, &MainWindow::notificationsUpdated, notifView, &NotificationView::refresh);
     // ui->centralStack->addWidget(new AppServicesView());    // 8
-    ui->centralStack->addWidget(new RulesEngineView());    // 9
+    ui->centralStack->addWidget(new RulesEngineView());    // 9 (Actually 7)
+
+    connect(dashView, &DashboardView::viewAllNotificationsRequested, [this]() {
+        // Find "Notifications" in navPanel and select it
+        for (int i = 0; i < ui->navPanel->count(); ++i) {
+            if (ui->navPanel->item(i)->text() == "Notifications") {
+                ui->navPanel->setCurrentRow(i);
+                break;
+            }
+        }
+    });
 
     setupNavigation();
     // createMenus(); // User requested to remove top menus
     
     connect(ui->navPanel, &QListWidget::currentRowChanged, this, &MainWindow::onNavItemChanged);
     connect(ui->btnSettings, &QPushButton::clicked, this, &MainWindow::showSettings);
+
+    // Setup Notification Polling
+    m_pollClient = new SupportClient(this);
+    QString url = ConfigManager::instance().notificationsUrl();
+    qDebug() << "MainWindow: Setting up polling with URL:" << url;
+    m_pollClient->setBaseUrl(url);
+    connect(m_pollClient, &SupportClient::notificationsReceived, this, &MainWindow::onPollingNotificationsReceived);
+
+    m_pollTimer = new QTimer(this);
+    connect(m_pollTimer, &QTimer::timeout, this, [this]() {
+        m_pollClient->fetchNotifications(0, 10); // Check for newest alerts regardless of status
+    });
+    m_pollTimer->start(5000); // Check every 5 seconds
+
     qDebug() << "MainWindow constructor end";
 }
 
@@ -118,4 +144,39 @@ void MainWindow::showSettings()
 void MainWindow::testConnection()
 {
     // Placeholder
+}
+
+void MainWindow::onPollingNotificationsReceived(const QJsonArray &notifications)
+{
+    static bool firstRun = true;
+    qDebug() << "MainWindow Poll Received:" << notifications.size() << "notifications";
+    if (notifications.isEmpty()) return;
+
+    QJsonObject latest = notifications.first().toObject();
+    QString currentId = latest["id"].toString();
+
+    if (firstRun || m_lastNotificationId.isEmpty()) {
+        qDebug() << "Initial notification record set to:" << currentId;
+        m_lastNotificationId = currentId;
+        firstRun = false;
+        
+        // Refresh the UI on first poll if there are notifications
+        emit notificationsUpdated();
+        return;
+    }
+
+    if (currentId != m_lastNotificationId) {
+        qDebug() << "New notification detected!" << currentId << "Old:" << m_lastNotificationId;
+        m_lastNotificationId = currentId;
+
+        // Show Toast
+        QString category = latest["category"].toString();
+        QString description = latest["description"].toString();
+        if (description.isEmpty()) description = latest["content"].toString();
+        
+        NotificationToast::showToast(category, description, this);
+        
+        // Signal NotificationView to refresh automatically
+        emit notificationsUpdated();
+    }
 }

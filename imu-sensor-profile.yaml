@@ -1,0 +1,40 @@
+apiVersion: "v3"
+name: "IMU-Sensor-Profile"
+manufacturer: "Unknown"
+model: "IMU-LoRa"
+labels:
+  - "imu"
+  - "lora"
+description: "IMU Sensor Profile for ChirpStack/EdgeX integration"
+
+deviceResources:
+  - name: "_pitch_x"
+    isHidden: false
+    description: "Pitch"
+    attributes: {}
+    properties:
+      valueType: "Float64"
+      readWrite: "R"
+  - name: "_roll_y"
+    isHidden: false
+    description: "Roll"
+    attributes: {}
+    properties:
+      valueType: "Float64"
+      readWrite: "R"
+  - name: "_yaw_z"
+    isHidden: false
+    description: "Yaw"
+    attributes: {}
+    properties:
+      valueType: "Float64"
+      readWrite: "R"
+
+deviceCommands:
+  - name: "status"
+    readWrite: "R"
+    isHidden: false
+    resourceOperations:
+      - deviceResource: "_pitch_x"
+      - deviceResource: "_roll_y"
+      - deviceResource: "_yaw_z"

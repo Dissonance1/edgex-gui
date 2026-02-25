@@ -48,6 +48,7 @@ public:
 
     // Overriding validateCurrentPage for JSON validation
     bool validateCurrentPage() override;
+    int nextId() const override;
 
 private:
     QWizardPage *createServicePage();

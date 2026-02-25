@@ -12,6 +12,7 @@ class AddSubscriptionDialog : public QDialog
     Q_OBJECT
 public:
     explicit AddSubscriptionDialog(QWidget *parent = nullptr);
+    void setSubscription(const QJsonObject &obj);
     QJsonObject subscriptionData() const;
 
 private:
@@ -42,6 +43,8 @@ private:
 
     // EMAIL Channel Specifics
     QLineEdit *m_emailRecipientsEdit;
+
+    bool m_isEdit = false;
 };
 
 #endif // ADDSUBSCRIPTIONDIALOG_H

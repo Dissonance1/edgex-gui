@@ -1,0 +1,17 @@
+{
+    "id": "face_detection_notification",
+    "sql": "SELECT readings[0].value as confidence, deviceName, origin FROM EdgeXStream WHERE profileName = \"face_recog\" AND CAST(readings[0].value, \"float\") > 0.6",
+    "actions": [
+        {
+            "log": {}
+        },
+        {
+            "rest": {
+                "url": "http://localhost:59860/api/v3/notification",
+                "method": "POST",
+                "dataTemplate": "[ { \"apiVersion\": \"v3\", \"notification\": { \"category\": \"FaceAlarm\", \"severity\": \"CRITICAL\", \"content\": \"Face: {{.confidence}}% exceeds threshold\", \"sender\": \"EdgeX_Kuiper\", \"contentType\": \"application/json\", \"description\": \"A high confidence alert triggered by EdgeX.\", \"labels\": [\"FaceRecog\", \"Confidenceallert\"], \"status\": \"NEW\" } } ]",
+                "sendSingle": true
+            }
+        }
+    ]
+}

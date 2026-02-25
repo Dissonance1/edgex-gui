@@ -1,0 +1,9 @@
+{
+    "id": "debug_rule",
+    "sql": "SELECT * FROM EdgeXStream",
+    "actions": [
+        {
+            "log": {}
+        }
+    ]
+}

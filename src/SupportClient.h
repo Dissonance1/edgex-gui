@@ -12,12 +12,16 @@ public:
     explicit SupportClient(QObject *parent = nullptr);
 
     // Notifications
-    void fetchNotifications();
+    void fetchNotifications(int offset = 0, int limit = 20);
+    void fetchNotificationsByStatus(const QString &status, int offset = 0, int limit = 20);
+    void fetchNotificationsByTimeRange(long long start, long long end, int offset = 0, int limit = 20);
     void deleteNotification(const QString &id);
     void cleanupNotifications();
+    void cleanupNotificationsByAge(long long age);
 
     void fetchSubscriptions();
     void addSubscription(const QJsonObject &subscription);
+    void updateSubscription(const QJsonObject &subscription);
     void deleteSubscription(const QString &name);
 
     // Scheduler

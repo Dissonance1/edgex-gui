@@ -1,0 +1,10 @@
+{
+    "apiVersion": "v3",
+    "notification": {
+        "category": "FaceAlarm",
+        "severity": "CRITICAL",
+        "content": "Test Single Object Clean",
+        "sender": "Kuiper",
+        "status": "NEW"
+    }
+}

@@ -11,6 +11,9 @@ class AddStreamDialog : public QDialog
 public:
     explicit AddStreamDialog(QWidget *parent = nullptr);
     QString sql() const;
+    void setSql(const QString &sql);
+
+    static QString streamJsonToSql(const QJsonObject &json);
 
 private:
     void setupUi();

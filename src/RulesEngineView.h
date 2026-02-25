@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
+#include <QPushButton>
 #include "RulesClient.h"
 
 namespace Ui {
@@ -22,12 +23,14 @@ public:
 private slots:
     void refresh();
     void onStreamsReceived(const QJsonArray &streams);
+    void onStreamReceived(const QString &streamName, const QJsonObject &stream);
     void onRulesReceived(const QJsonArray &rules);
     void onRuleReceived(const QString &id, const QJsonObject &rule);
     void onRuleStatusReceived(const QString &id, const QJsonObject &status);
     void onOperationCompleted(bool success, const QString &message);
     
     void onAddStream();
+    void onEditStream();
     void onDeleteStream();
     void onAddRule();
     void onEditRule();
@@ -40,8 +43,10 @@ private slots:
 private:
     Ui::RulesEngineView *ui;
     RulesClient *m_client;
+    QPushButton *m_btnEditStream; 
     QMap<QString, QJsonObject> m_rulesData;
     QString m_pendingRuleId;
+    QString m_pendingStreamName;
     bool m_isEditing;
     bool m_isViewingSql;
 };

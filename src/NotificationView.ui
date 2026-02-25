@@ -22,11 +22,118 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <layout class="QHBoxLayout" name="nToolbar">
+        <layout class="QHBoxLayout" name="topRow">
+         <item>
+          <widget class="QLabel" name="lblStatusInfo">
+           <property name="styleSheet">
+            <string notr="true">color: #666; font-style: italic;</string>
+           </property>
+           <property name="text">
+            <string>The data loaded by default takes the value of status as NEW</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_3">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
          <item>
           <widget class="QPushButton" name="btnRefresh">
            <property name="text">
             <string>Refresh</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnToggleAdvanced">
+           <property name="text">
+            <string>Advanced Options</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+           <property name="checked">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="filterLayout">
+         <item>
+          <widget class="QComboBox" name="comboStatus">
+           <item>
+            <property name="text">
+             <string>NEW</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>PROCESSED</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>ESCALATED</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDateTimeEdit" name="dateStart">
+           <property name="displayFormat">
+            <string>yyyy-MM-dd HH:mm:ss</string>
+           </property>
+           <property name="calendarPopup">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDateTimeEdit" name="dateEnd">
+           <property name="displayFormat">
+            <string>yyyy-MM-dd HH:mm:ss</string>
+           </property>
+           <property name="calendarPopup">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnSearch">
+           <property name="text">
+            <string>Search</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="cleanupRow">
+         <item>
+          <widget class="QLabel" name="label">
+           <property name="text">
+            <string>Age (ns):</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="editCleanupAge"/>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnCleanupByAge">
+           <property name="text">
+            <string>Cleanup By Age</string>
            </property>
           </widget>
          </item>
@@ -69,7 +176,27 @@
          </column>
          <column>
           <property name="text">
+           <string>Labels</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
            <string>Content</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>ContentType</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Description</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Sender</string>
           </property>
          </column>
          <column>
@@ -79,7 +206,31 @@
          </column>
          <column>
           <property name="text">
+           <string>Status</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
            <string>Created</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Modified</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="detailTable">
+         <column>
+          <property name="text">
+           <string>Field</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Value</string>
           </property>
          </column>
         </widget>
@@ -104,6 +255,13 @@
           <widget class="QPushButton" name="btnAddSub">
            <property name="text">
             <string>Add Subscription</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnEditSub">
+           <property name="text">
+            <string>Edit</string>
            </property>
           </widget>
          </item>

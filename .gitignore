@@ -1,0 +1,19 @@
+# Build directories
+build/
+build-*/
+build_local/
+build_wsl/
+
+# Qt Creator
+CMakeLists.txt.user*
+.qtcreator/
+
+# Temporary files
+*.tar.gz
+dump.rdb
+*.log
+runtime_logs.txt
+
+# OS files
+.DS_Store
+Thumbs.db

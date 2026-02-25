@@ -7,9 +7,22 @@ SupportClient::SupportClient(QObject *parent)
 {
 }
 
-void SupportClient::fetchNotifications()
+void SupportClient::fetchNotifications(int offset, int limit)
 {
-    get("api/v3/notification/all");
+    // EdgeX V3 doesn't have an "/all" route for notifications.
+    // We use a large time range as a substitute to fetch "all".
+    // Using 0 to a very large number (yr 2100 ~ 4102444800000)
+    fetchNotificationsByTimeRange(0, 4102444800000LL, offset, limit);
+}
+
+void SupportClient::fetchNotificationsByStatus(const QString &status, int offset, int limit)
+{
+    get(QString("api/v3/notification/status/%1?offset=%2&limit=%3").arg(status).arg(offset).arg(limit));
+}
+
+void SupportClient::fetchNotificationsByTimeRange(long long start, long long end, int offset, int limit)
+{
+    get(QString("api/v3/notification/start/%1/end/%2?offset=%3&limit=%4").arg(start).arg(end).arg(offset).arg(limit));
 }
 
 void SupportClient::deleteNotification(const QString &id)
@@ -21,7 +34,16 @@ void SupportClient::deleteNotification(const QString &id)
 
 void SupportClient::cleanupNotifications()
 {
-    // Custom cleanup logic if available, or delete one by one
+    deleteRequest("api/v3/notification/cleanup", [this](const QByteArray &data, bool success, const QString &error) {
+        emit operationCompleted(success, success ? "Notifications cleaned up" : error);
+    });
+}
+
+void SupportClient::cleanupNotificationsByAge(long long age)
+{
+    deleteRequest("api/v3/notification/age/" + QString::number(age), [this](const QByteArray &data, bool success, const QString &error) {
+        emit operationCompleted(success, success ? "Old notifications cleaned up" : error);
+    });
 }
 
 void SupportClient::fetchSubscriptions()
@@ -35,6 +57,15 @@ void SupportClient::addSubscription(const QJsonObject &subscription)
     array.append(subscription);
     post("api/v3/subscription", array, [this](const QByteArray &data, bool success, const QString &error) {
         emit operationCompleted(success, success ? "Subscription added" : error);
+    });
+}
+
+void SupportClient::updateSubscription(const QJsonObject &subscription)
+{
+    QJsonArray array;
+    array.append(subscription);
+    patch("api/v3/subscription", array, [this](const QByteArray &data, bool success, const QString &error) {
+        emit operationCompleted(success, success ? "Subscription updated" : error);
     });
 }
 
@@ -90,8 +121,13 @@ void SupportClient::deleteIntervalAction(const QString &name)
 void SupportClient::get(const QString &path)
 {
     QString fullPath = baseUrl();
+    if (fullPath.isEmpty()) {
+        qDebug() << "SupportClient: baseUrl is empty! Cannot fetch" << path;
+        return;
+    }
     if (!fullPath.endsWith('/') && !path.startsWith('/')) fullPath += "/";
     
+    qDebug() << "SupportClient fetching:" << (fullPath + path);
     QNetworkRequest request(QUrl(fullPath + path));
     QNetworkReply* reply = m_networkManager->get(request);
     
@@ -99,10 +135,23 @@ void SupportClient::get(const QString &path)
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray data = reply->readAll();
             QJsonDocument doc = QJsonDocument::fromJson(data);
-            if (path.contains("notification")) emit notificationsReceived(doc.object()["notifications"].toArray());
-            else if (path.contains("subscription")) emit subscriptionsReceived(doc.object()["subscriptions"].toArray());
-            else if (path.contains("intervalaction")) emit intervalActionsReceived(doc.object()["actions"].toArray());
-            else if (path.contains("interval")) emit intervalsReceived(doc.object()["intervals"].toArray());
+            QJsonArray arr;
+            if (path.contains("notification")) {
+                arr = doc.object()["notifications"].toArray();
+                qDebug() << "SupportClient: Received" << arr.size() << "notifications";
+                emit notificationsReceived(arr);
+            } else if (path.contains("subscription")) {
+                arr = doc.object()["subscriptions"].toArray();
+                emit subscriptionsReceived(arr);
+            } else if (path.contains("intervalaction")) {
+                arr = doc.object()["actions"].toArray();
+                emit intervalActionsReceived(arr);
+            } else if (path.contains("interval")) {
+                arr = doc.object()["intervals"].toArray();
+                emit intervalsReceived(arr);
+            }
+        } else {
+            qDebug() << "SupportClient: Error fetching" << path << ":" << reply->errorString();
         }
         reply->deleteLater();
     });

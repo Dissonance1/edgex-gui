@@ -10,9 +10,60 @@
 #include <QLabel>
 
 AddSubscriptionDialog::AddSubscriptionDialog(QWidget *parent)
-    : QDialog(parent)
+    : QDialog(parent), m_isEdit(false)
 {
     setupUi();
+}
+
+void AddSubscriptionDialog::setSubscription(const QJsonObject &obj)
+{
+    m_isEdit = true;
+    setWindowTitle("Edit EdgeX Subscription");
+    
+    // Find OK button and change text
+    for (QPushButton *btn : findChildren<QPushButton*>()) {
+        if (btn->text() == "Create Subscription") {
+            btn->setText("Update Subscription");
+            break;
+        }
+    }
+
+    m_nameEdit->setText(obj["name"].toString());
+    m_nameEdit->setReadOnly(true); // Subscription name is usually immutable in EdgeX
+    m_descriptionEdit->setText(obj["description"].toString());
+    m_receiverEdit->setText(obj["receiver"].toString());
+    m_adminStateCombo->setCurrentText(obj["adminState"].toString());
+    m_resendIntervalEdit->setText(obj["resendInterval"].toString());
+    m_resendLimitSpin->setValue(obj["resendLimit"].toInt());
+
+    QJsonArray catsArr = obj["categories"].toArray();
+    QStringList cats;
+    for (const auto &v : catsArr) cats.append(v.toString());
+    m_categoriesEdit->setText(cats.join(", "));
+
+    QJsonArray labsArr = obj["labels"].toArray();
+    QStringList labs;
+    for (const auto &v : labsArr) labs.append(v.toString());
+    m_labelsEdit->setText(labs.join(", "));
+
+    QJsonArray channels = obj["channels"].toArray();
+    if (!channels.isEmpty()) {
+        QJsonObject chan = channels.first().toObject();
+        QString type = chan["type"].toString();
+        m_channelTypeCombo->setCurrentText(type);
+        
+        if (type == "REST") {
+            m_restMethodCombo->setCurrentText(chan["httpMethod"].toString());
+            m_restHostEdit->setText(chan["host"].toString());
+            m_restPortEdit->setText(QString::number(chan["port"].toInt()));
+            m_restPathEdit->setText(chan["path"].toString());
+        } else if (type == "EMAIL") {
+            QJsonArray recipsArr = chan["recipients"].toArray();
+            QStringList recips;
+            for (const auto &v : recipsArr) recips.append(v.toString());
+            m_emailRecipientsEdit->setText(recips.join(", "));
+        }
+    }
 }
 
 void AddSubscriptionDialog::setupUi()
@@ -180,7 +231,7 @@ QJsonObject AddSubscriptionDialog::subscriptionData() const
         for (const QString &r : m_emailRecipientsEdit->text().split(",", Qt::SkipEmptyParts)) {
             recipients.append(r.trimmed());
         }
-        channel["emailRecipients"] = recipients;
+        channel["recipients"] = recipients;
     }
 
     QJsonArray channels;

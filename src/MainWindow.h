@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QListWidget>
 #include <QStackedWidget>
+#include <QTimer>
+#include "SupportClient.h"
 
 class DataIngestionServer;
 
@@ -19,10 +21,14 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+signals:
+    void notificationsUpdated();
+
 private slots:
     void onNavItemChanged(int index);
     void showSettings();
     void testConnection();
+    void onPollingNotificationsReceived(const QJsonArray &notifications);
 
 private:
     void setupNavigation();
@@ -34,6 +40,9 @@ private:
     // m_centralStack is now ui->centralStack
     
     DataIngestionServer *m_ingestionServer;
+    SupportClient *m_pollClient;
+    QTimer *m_pollTimer;
+    QString m_lastNotificationId;
 };
 
 #endif // MAINWINDOW_H

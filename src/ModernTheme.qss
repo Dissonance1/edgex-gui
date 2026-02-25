@@ -150,3 +150,9 @@ QLabel {
 QLabel#titleLabel {
     color: #023356; /* Navy Blue Title */
 }
+
+/* Custom Widgets */
+QTextEdit#sqlEditor {
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+}

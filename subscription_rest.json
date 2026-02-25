@@ -1,0 +1,25 @@
+[
+    {
+        "apiVersion": "v3",
+        "subscription": {
+            "name": "admin-rest",
+            "channels": [
+                {
+                    "type": "REST",
+                    "host": "localhost",
+                    "port": 59880,
+                    "httpMethod": "POST",
+                    "path": "/api/v3/ping"
+                }
+            ],
+            "receiver": "admin",
+            "categories": [
+                "security"
+            ],
+            "labels": [
+                "face-detection"
+            ],
+            "adminState": "UNLOCKED"
+        }
+    }
+]

@@ -24,6 +24,7 @@ DevicesView::DevicesView(QWidget *parent)
     
     connect(ui->refreshButton, &QPushButton::clicked, this, &DevicesView::refresh);
     connect(ui->addButton, &QPushButton::clicked, this, &DevicesView::onAddDevice);
+    connect(ui->editButton, &QPushButton::clicked, this, &DevicesView::onEditDevice);
     // connect(ui->commandButton, &QPushButton::clicked, this, &DevicesView::onViewDevice);
     connect(ui->searchEdit, &QLineEdit::textChanged, this, &DevicesView::onSearch);
 
@@ -54,6 +55,19 @@ void DevicesView::onAddDevice()
     if (wizard.exec() == QDialog::Accepted) {
         m_client->setBaseUrl(ConfigManager::instance().metadataUrl());
         m_client->addDevice(wizard.deviceData());
+    }
+}
+
+void DevicesView::onEditDevice()
+{
+    QModelIndex idx = ui->tableView->currentIndex();
+    if (!idx.isValid()) return;
+    
+    QJsonObject device = m_model->getDevice(idx.row());
+    AddDeviceWizard wizard(this, device);
+    if (wizard.exec() == QDialog::Accepted) {
+        m_client->setBaseUrl(ConfigManager::instance().metadataUrl());
+        m_client->updateDevice(wizard.deviceData());
     }
 }
 
@@ -94,6 +108,7 @@ void DevicesView::onSearch(const QString &text)
 void DevicesView::onOperationCompleted(bool success, const QString &message)
 {
     if (success) {
+        QMessageBox::information(this, "Success", message);
         refresh();
     } else {
         QMessageBox::warning(this, "Error", message);

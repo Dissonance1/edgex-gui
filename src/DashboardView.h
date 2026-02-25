@@ -6,6 +6,7 @@
 #include "MetadataClient.h"
 #include "CoreDataClient.h"
 #include "SupportClient.h"
+#include "NotificationPopup.h"
 
 namespace Ui {
 class DashboardView;
@@ -18,6 +19,9 @@ public:
     explicit DashboardView(QWidget *parent = nullptr);
     ~DashboardView();
 
+signals:
+    void viewAllNotificationsRequested();
+
 private slots:
     void refresh();
     void onDevicesReceived(const QJsonArray &devices);
@@ -27,12 +31,14 @@ private slots:
     void onReadingsReceived(const QJsonArray &readings);
     void onNotificationsReceived(const QJsonArray &notifications);
     void onIntervalsReceived(const QJsonArray &intervals);
+    void onNotificationClicked();
 
 private:
     Ui::DashboardView *ui;
     MetadataClient *m_metadataClient;
     CoreDataClient *m_coreDataClient;
     SupportClient *m_supportClient;
+    NotificationPopup *m_notificationPopup = nullptr;
 
     // Card Labels (pointers into created widgets)
     QLabel *m_serviceCount = nullptr;

@@ -24,6 +24,7 @@ DashboardView::DashboardView(QWidget *parent)
     connect(m_supportClient, &SupportClient::intervalsReceived, this, &DashboardView::onIntervalsReceived);
     
     connect(ui->refreshButton, &QPushButton::clicked, this, &DashboardView::refresh);
+    connect(ui->btnNotification, &QPushButton::clicked, this, &DashboardView::onNotificationClicked);
 
     // Recreate grid items programmatically (simulating dynamic content)
     // We add them to ui->cardGrid
@@ -137,3 +138,28 @@ void DashboardView::onIntervalsReceived(const QJsonArray &intervals)
 {
     if(m_schedulerCount) m_schedulerCount->setText(QString::number(intervals.size()));
 }
+
+void DashboardView::onNotificationClicked()
+{
+    if (!m_notificationPopup) {
+        m_notificationPopup = new NotificationPopup(this->window());
+        connect(m_notificationPopup, &NotificationPopup::viewAllRequested, this, [this]() {
+            m_notificationPopup->hide();
+            emit viewAllNotificationsRequested();
+        });
+    }
+
+    if (m_notificationPopup->isVisible()) {
+        m_notificationPopup->hide();
+    } else {
+        // Position below the bell icon
+        QPoint btnPos = ui->btnNotification->mapToGlobal(QPoint(0, 0));
+        int x = btnPos.x() - m_notificationPopup->width() + ui->btnNotification->width();
+        int y = btnPos.y() + ui->btnNotification->height() + 5;
+        
+        m_notificationPopup->move(x, y);
+        m_notificationPopup->show();
+        m_notificationPopup->fetchNotifications();
+    }
+}
+

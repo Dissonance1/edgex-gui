@@ -22,12 +22,14 @@ public:
     void stopRule(const QString &id);
     void fetchRule(const QString &id);
     void fetchRuleStatus(const QString &id);
+    void fetchStream(const QString &streamName);
 
 private:
     void get(const QString &path);
 
 signals:
     void streamsReceived(const QJsonArray &streams);
+    void streamReceived(const QString &streamName, const QJsonObject &stream);
     void rulesReceived(const QJsonArray &rules);
     void ruleReceived(const QString &id, const QJsonObject &rule);
     void ruleStatusReceived(const QString &id, const QJsonObject &status);

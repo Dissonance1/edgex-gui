@@ -12,6 +12,11 @@ void RulesClient::fetchStreams()
     get("streams"); // eKuiper streams
 }
 
+void RulesClient::fetchStream(const QString &streamName)
+{
+    get("streams/" + streamName);
+}
+
 void RulesClient::fetchRules()
 {
     get("rules"); // eKuiper rules
@@ -99,6 +104,10 @@ void RulesClient::get(const QString &path)
             QByteArray data = reply->readAll();
             QJsonDocument doc = QJsonDocument::fromJson(data);
             if (path == "streams") emit streamsReceived(doc.array());
+            else if (path.startsWith("streams/")) {
+                QString name = path.section('/', 1, 1);
+                emit streamReceived(name, doc.object());
+            }
             else if (path == "rules") emit rulesReceived(doc.array());
             else if (path.startsWith("rules/") && path.endsWith("/status")) {
                 QString id = path.section('/', 1, 1);

@@ -43,8 +43,11 @@ void EdgexClientBase::post(const QString &path, const QJsonObject &data, std::fu
     QNetworkRequest request(QUrl(fullPath + path));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     
-    QNetworkReply *reply = m_networkManager->post(request, QJsonDocument(data).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+    QByteArray payload = QJsonDocument(data).toJson();
+    qDebug() << "EdgexClientBase POST:" << (fullPath + path) << "Payload:" << payload;
+    
+    QNetworkReply *reply = m_networkManager->post(request, payload);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback, fullPath, path]() {
         bool success = (reply->error() == QNetworkReply::NoError);
         QByteArray responseData = reply->readAll();
         QString errorMsg = success ? "" : reply->errorString();
@@ -69,8 +72,11 @@ void EdgexClientBase::post(const QString &path, const QJsonArray &data, std::fun
     QNetworkRequest request(QUrl(fullPath + path));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     
-    QNetworkReply *reply = m_networkManager->post(request, QJsonDocument(data).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+    QByteArray payload = QJsonDocument(data).toJson();
+    qDebug() << "EdgexClientBase POST (Array):" << (fullPath + path) << "Payload:" << payload;
+
+    QNetworkReply *reply = m_networkManager->post(request, payload);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback, fullPath, path]() {
         bool success = (reply->error() == QNetworkReply::NoError);
         QByteArray responseData = reply->readAll();
         QString errorMsg = success ? "" : reply->errorString();
@@ -168,8 +174,11 @@ void EdgexClientBase::patch(const QString &path, const QJsonObject &data, std::f
     QNetworkRequest request(QUrl(fullPath + path));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     
-    QNetworkReply *reply = m_networkManager->sendCustomRequest(request, "PATCH", QJsonDocument(data).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+    QByteArray payload = QJsonDocument(data).toJson();
+    qDebug() << "EdgexClientBase PATCH:" << (fullPath + path) << "Payload:" << payload;
+
+    QNetworkReply *reply = m_networkManager->sendCustomRequest(request, "PATCH", payload);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback, fullPath, path]() {
         bool success = (reply->error() == QNetworkReply::NoError);
         QByteArray responseData = reply->readAll();
         QString errorMsg = success ? "" : reply->errorString();

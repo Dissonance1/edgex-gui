@@ -1,0 +1,22 @@
+[
+    {
+        "apiVersion": "v3",
+        "device": {
+            "name": "imu_2cf7f12052608e69",
+            "description": "IMU Sensor Device",
+            "adminState": "UNLOCKED",
+            "operatingState": "UP",
+            "labels": [
+                "imu",
+                "lora"
+            ],
+            "serviceName": "device-mqtt",
+            "profileName": "IMU-Sensor-Profile",
+            "protocols": {
+                "mqtt": {
+                    "CommandTopic": "command/imu_2cf7f12052608e69"
+                }
+            }
+        }
+    }
+]

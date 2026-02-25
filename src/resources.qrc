@@ -1,6 +1,7 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
     <file>resources/honeycomblogo.png</file>
+    <file>resources/notification.png</file>
     <file>ModernTheme.qss</file>
 </qresource>
 </RCC>

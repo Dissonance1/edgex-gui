@@ -38,6 +38,13 @@
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="btnEditStream">
+           <property name="text">
+            <string>Edit Stream</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="btnDeleteStream">
            <property name="text">
             <string>Delete Stream</string>

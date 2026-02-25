@@ -12,6 +12,7 @@ public:
     explicit ProfilesModel(QObject *parent = nullptr);
 
     void setProfiles(const QJsonArray &profiles);
+    QJsonObject getProfile(int row) const { return m_profiles[row].toObject(); }
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     int columnCount(const QModelIndex &parent = QModelIndex()) const override;

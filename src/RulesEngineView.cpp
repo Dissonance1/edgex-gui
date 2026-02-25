@@ -1,6 +1,7 @@
 #include "RulesEngineView.h"
 #include "ui_RulesEngineView.h"
 #include <QHeaderView>
+#include <QHBoxLayout>
 #include <QMessageBox>
 #include <QJsonDocument>
 #include "ConfigManager.h"
@@ -9,7 +10,7 @@
 #include "AddJsonDialog.h"
 
 RulesEngineView::RulesEngineView(QWidget *parent)
-    : QWidget(parent), ui(new Ui::RulesEngineView), m_client(new RulesClient(this)), m_isEditing(false), m_isViewingSql(false)
+    : QWidget(parent), ui(new Ui::RulesEngineView), m_client(new RulesClient(this)), m_btnEditStream(nullptr), m_isEditing(false), m_isViewingSql(false)
 {
     ui->setupUi(this);
     
@@ -19,10 +20,13 @@ RulesEngineView::RulesEngineView(QWidget *parent)
     ui->streamsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
     connect(m_client, &RulesClient::streamsReceived, this, &RulesEngineView::onStreamsReceived);
+    connect(m_client, &RulesClient::streamReceived, this, &RulesEngineView::onStreamReceived);
     connect(m_client, &RulesClient::rulesReceived, this, &RulesEngineView::onRulesReceived);
     connect(m_client, &RulesClient::ruleReceived, this, &RulesEngineView::onRuleReceived);
     connect(m_client, &RulesClient::ruleStatusReceived, this, &RulesEngineView::onRuleStatusReceived);
     connect(m_client, &RulesClient::operationCompleted, this, &RulesEngineView::onOperationCompleted);
+    
+    connect(ui->btnEditStream, &QPushButton::clicked, this, &RulesEngineView::onEditStream);
     
     connect(ui->btnRefreshStreams, &QPushButton::clicked, this, &RulesEngineView::refresh);
     connect(ui->btnAddStream, &QPushButton::clicked, this, &RulesEngineView::onAddStream);
@@ -115,7 +119,7 @@ void RulesEngineView::onRuleReceived(const QString &id, const QJsonObject &rule)
         if (m_isEditing) {
             m_isEditing = false;
             m_pendingRuleId = "";
-            onEditRule(); // Try again now that we have data
+            this->onEditRule(); // Try again now that we have data
         } else if (m_isViewingSql) {
             m_isViewingSql = false;
             m_pendingRuleId = "";
@@ -139,6 +143,33 @@ void RulesEngineView::onDeleteStream()
     QString name = item->text();
     if (QMessageBox::question(this, "Confirm", "Delete stream " + name + "?") == QMessageBox::Yes) {
         m_client->deleteStream(name);
+    }
+}
+
+void RulesEngineView::onEditStream()
+{
+    QTableWidgetItem *item = ui->streamsTable->currentItem();
+    if (!item) return;
+    QString name = item->text();
+    m_pendingStreamName = name;
+    m_client->setBaseUrl(ConfigManager::instance().rulesUrl());
+    m_client->fetchStream(name);
+}
+
+void RulesEngineView::onStreamReceived(const QString &streamName, const QJsonObject &stream)
+{
+    if (streamName != m_pendingStreamName) return;
+    m_pendingStreamName = "";
+    
+    AddStreamDialog dlg(this);
+    dlg.setSql(AddStreamDialog::streamJsonToSql(stream));
+    dlg.setWindowTitle("Edit Stream: " + streamName);
+    
+    if (dlg.exec() == QDialog::Accepted) {
+        if (QMessageBox::question(this, "Update Stream", "Updating a stream requires dropping and recreating it. \nAre you sure you want to proceed?") == QMessageBox::Yes) {
+            m_client->deleteStream(streamName);
+            m_client->createStream(dlg.sql());
+        }
     }
 }
 
