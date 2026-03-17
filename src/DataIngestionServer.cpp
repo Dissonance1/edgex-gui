@@ -221,19 +221,17 @@ QJsonObject DataIngestionServer::translateSenMLToV3(const QJsonArray& senmlData)
             
             if (item.contains("v")) {
                 double val = item["v"].toDouble();
-                if (resource == "face_count") {
+                // Check if it's likely an integer (no decimal or whole number)
+                if (val == (long long)val && resource.contains("count")) {
                     type = "Int64";
                     valStr = QString::number((long long)val);
-                } else if (resource == "confidence" || resource == "cam_temp" || resource == "temperature") {
-                    type = "Float32";
-                    valStr = QString::number(val);
                 } else {
-                    // Try to guess type or use Float64
                     type = "Float64";
                     valStr = QString::number(val);
                 }
             } else if (item.contains("vs")) {
                 valStr = item["vs"].toString();
+                type = "String";
             } else if (item.contains("vb")) {
                 type = "Binary";
                 valStr = item["vb"].toString();

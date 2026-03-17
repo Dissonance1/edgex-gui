@@ -1,0 +1,557 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ui version="4.0">
+ <class>AIRuntimeView</class>
+ <widget class="QWidget" name="AIRuntimeView">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1100</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="mainVerticalLayout">
+   <property name="spacing">
+    <number>0</number>
+   </property>
+   <property name="leftMargin">
+    <number>10</number>
+   </property>
+   <property name="topMargin">
+    <number>10</number>
+   </property>
+   <property name="rightMargin">
+    <number>10</number>
+   </property>
+   <property name="bottomMargin">
+    <number>10</number>
+   </property>
+   <item><layout class="QHBoxLayout" name="topNavBarLayout"><item><widget class="QLabel" name="labelTitle">
+         <property name="font">
+          <font>
+           <pointsize>16</pointsize>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="text">
+          <string>AI Runtime</string>
+         </property>
+        </widget>
+       </item><item><spacer name="navSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint"><size><width>40</width><height>20</height></size></property></spacer></item><item><widget class="QLabel" name="lblAipuStatus"><property name="text"><string>AIPU: Investigating...</string></property><property name="styleSheet"><string notr="true">font-weight: bold; margin-right: 15px;</string></property></widget></item><item><widget class="QPushButton" name="btnLaunch">
+         <property name="minimumSize">
+          <size>
+           <width>120</width>
+           <height>35</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QPushButton { background-color: #F9942A; color: white; border: none; font-weight: bold; } QPushButton:hover { background-color: #E08426; } QPushButton:disabled { background-color: #DEE2E6; }</string>
+         </property>
+         <property name="text">
+          <string>Start Inference</string>
+         </property>
+        </widget>
+       </item><item><widget class="QPushButton" name="btnStop">
+         <property name="minimumSize">
+          <size>
+           <width>120</width>
+           <height>35</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QPushButton { background-color: #DC3545; color: white; border: none; font-weight: bold; } QPushButton:hover { background-color: #C82333; } QPushButton:disabled { background-color: #DEE2E6; }</string>
+         </property>
+         <property name="text">
+          <string>Stop Inference</string>
+         </property>
+        </widget>
+       </item></layout></item><item><widget class="QStackedWidget" name="contentStack">
+      <widget class="QWidget" name="monitoringPage">
+       <layout class="QVBoxLayout" name="monitoringLayout">
+        <item>
+         <layout class="QHBoxLayout" name="cameraSelectionLayout">
+          <item>
+           <widget class="QLabel" name="lblSelectCamera">
+            <property name="text">
+             <string>Select Camera Source:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="comboActiveProfile">
+            <property name="minimumWidth">
+             <number>200</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="liveGrid">
+          <property name="title">
+           <string>Live Detection View</string>
+          </property>
+          <layout class="QVBoxLayout" name="videoContainer" />
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="modelPage">
+       <layout class="QHBoxLayout" name="modelMainHLayout"><item><widget class="QScrollArea" name="scrollModelSettings">
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="scrollAreaWidgetContents">
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <item>
+             <widget class="QGroupBox" name="groupModelFile">
+              <property name="title">
+               <string>Model Configuration (YAML / Zoo)</string>
+              </property>
+              <layout class="QFormLayout" name="formModel">
+               <item row="0" column="0"><widget class="QLabel" name="lblModelZoo"><property name="text"><string>Select Model (Zoo):</string></property></widget></item><item row="0" column="1"><widget class="QComboBox" name="comboModelZoo"><property name="editable"><bool>true</bool></property><property name="placeholderText"><string>Loading Model Zoo...</string></property></widget></item><item row="1" column="0"><widget class="QLabel" name="lblCustomModel"><property name="text"><string>Custom YAML:</string></property></widget></item><item row="1" column="1"><layout class="QHBoxLayout" name="customModelLayout"><item><widget class="QLineEdit" name="editModelPath"><property name="readOnly"><bool>true</bool></property><property name="placeholderText"><string>Path to custom model.yaml...</string></property></widget></item><item><widget class="QPushButton" name="btnBrowseModelYaml"><property name="text"><string>Browse...</string></property></widget></item></layout></item><item row="2" column="0"><widget class="QLabel" name="lblModelInfoTitle"><property name="text"><string>Model Info:</string></property></widget></item><item row="2" column="1"><widget class="QLabel" name="lblModelInfo"><property name="text"><string>Select a model to see details.</string></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string notr="true">color: #6c757d; font-style: italic;</string></property></widget></item><item row="3" column="0"><widget class="QLabel" name="lblConfidence"><property name="text"><string>Confidence Threshold:</string></property></widget></item><item row="3" column="1"><widget class="QDoubleSpinBox" name="spinConfidence"><property name="value"><number>70</number></property></widget></item><item row="4" column="0"><widget class="QLabel" name="lblClassMap"><property name="text"><string>Class Map (XML/JSON):</string></property></widget></item><item row="4" column="1"><layout class="QHBoxLayout" name="classMapLayout"><item><widget class="QLineEdit" name="editClassMapPath"><property name="placeholderText"><string>Path to class_map...</string></property></widget></item><item><widget class="QPushButton" name="btnBrowseClassMap"><property name="text"><string>Browse...</string></property></widget></item></layout></item><item row="5" column="0"><widget class="QLabel" name="lblEmbedding"><property name="text"><string>Embedding JSON:</string></property></widget></item><item row="5" column="1"><layout class="QHBoxLayout" name="embeddingLayout"><item><widget class="QLineEdit" name="editEmbeddingPath"><property name="placeholderText"><string>Path to embedding.json...</string></property></widget></item><item><widget class="QPushButton" name="btnBrowseEmbedding"><property name="text"><string>Browse...</string></property></widget></item></layout></item></layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupPipeline">
+              <property name="title">
+               <string>Pipeline Control</string>
+              </property>
+              <layout class="QFormLayout" name="formPipeline">
+               <item row="0" column="0">
+                <widget class="QLabel" name="lblPipelineType">
+                 <property name="text">
+                  <string>Pipeline Type:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QComboBox" name="comboPipelineType">
+                 <item>
+                  <property name="text">
+                   <string>torch</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>gst</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>torch-aipu</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="lblFrameLimit">
+                 <property name="text">
+                  <string>Frame Limit:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QSpinBox" name="spinFrameLimit">
+                 <property name="maximum">
+                  <number>999999</number>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="0">
+                <widget class="QLabel" name="lblDisplayMode">
+                 <property name="text">
+                  <string>Display Mode:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="1">
+                <widget class="QComboBox" name="comboDisplayMode">
+                 <item>
+                  <property name="text">
+                   <string>Windowed</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Headless</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item row="3" column="0">
+                <widget class="QLabel" name="lblWindowSize">
+                 <property name="text">
+                  <string>Window Size:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="1">
+                <widget class="QLineEdit" name="editWindowSize">
+                 <property name="placeholderText">
+                  <string>e.g. 640x480</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="4" column="0">
+                <widget class="QLabel" name="lblSavePath">
+                 <property name="text">
+                  <string>Save Output Path:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="4" column="1">
+                <layout class="QHBoxLayout" name="horizontalLayout_7">
+                 <item>
+                  <widget class="QLineEdit" name="editSaveOutputPath" />
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="btnBrowseOutput">
+                   <property name="text">
+                    <string>Browse...</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupHwAccel">
+              <property name="title">
+               <string>Hardware &amp; Performance</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_5">
+               <item>
+                <layout class="QGridLayout" name="gridLayout">
+                 <item row="0" column="0">
+                  <widget class="QCheckBox" name="chkHwCodec">
+                   <property name="text">
+                    <string>Enable Hardware Codec</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QCheckBox" name="chkVaapi">
+                   <property name="text">
+                    <string>Enable VAAPI</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QCheckBox" name="chkOpencl">
+                   <property name="text">
+                    <string>Enable OpenCL</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="1">
+                  <widget class="QCheckBox" name="chkOpengl">
+                   <property name="text">
+                    <string>Enable OpenGL</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupAIPU">
+              <property name="title">
+               <string>AIPU Core Management &amp; Live Status</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_6">
+               <item><layout class="QHBoxLayout" name="aipuStatusLayout"><item><widget class="QGroupBox" name="core0Status"><property name="title"><string>Core 0</string></property><layout class="QVBoxLayout" name="c0Layout"><item><widget class="QLabel" name="lblCore0State"><property name="text"><string>Idle</string></property><property name="alignment"><enum>Qt::AlignCenter</enum></property></widget></item></layout></widget></item><item><widget class="QGroupBox" name="core1Status"><property name="title"><string>Core 1</string></property><layout class="QVBoxLayout" name="c1Layout"><item><widget class="QLabel" name="lblCore1State"><property name="text"><string>Idle</string></property><property name="alignment"><enum>Qt::AlignCenter</enum></property></widget></item></layout></widget></item><item><widget class="QGroupBox" name="core2Status"><property name="title"><string>Core 2</string></property><layout class="QVBoxLayout" name="c2Layout"><item><widget class="QLabel" name="lblCore2State"><property name="text"><string>Idle</string></property><property name="alignment"><enum>Qt::AlignCenter</enum></property></widget></item></layout></widget></item><item><widget class="QGroupBox" name="core3Status"><property name="title"><string>Core 3</string></property><layout class="QVBoxLayout" name="c3Layout"><item><widget class="QLabel" name="lblCore3State"><property name="text"><string>Idle</string></property><property name="alignment"><enum>Qt::AlignCenter</enum></property></widget></item></layout></widget></item></layout></item><item>
+                <layout class="QFormLayout" name="formAIPU">
+                 <item row="0" column="0">
+                  <widget class="QLabel" name="lblAipuCores">
+                   <property name="text">
+                    <string>AIPU Cores (Selection):</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QLineEdit" name="editAipuCores">
+                   <property name="placeholderText">
+                    <string>e.g. 0,1 (Busy check active)</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkShowHostFps">
+                 <property name="text">
+                  <string>Show Host FPS</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="chkShowStreamTiming">
+                 <property name="text">
+                  <string>Show Stream Timing</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <spacer name="verticalSpacer_3">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </item><item><widget class="QGroupBox" name="groupProfiles"><property name="title"><string>Inference Profiles (Reuse Settings)</string></property><layout class="QVBoxLayout" name="profileVLayout"><property name="spacing"><number>10</number></property><property name="leftMargin"><number>10</number></property><property name="topMargin"><number>10</number></property><property name="rightMargin"><number>10</number></property><property name="bottomMargin"><number>10</number></property><item><layout class="QHBoxLayout" name="lay1"><item><widget class="QLabel" name="lblSelectProfile"><property name="text"><string>Select Profile:</string></property></widget></item><item><widget class="QComboBox" name="comboProfiles" /></item></layout></item><item><layout class="QHBoxLayout" name="lay2"><item><widget class="QLineEdit" name="editProfileName"><property name="placeholderText"><string>Profile Name...</string></property></widget></item></layout></item><item><layout class="QHBoxLayout" name="lay3"><property name="spacing"><number>5</number></property><item><widget class="QPushButton" name="btnNewProfile"><property name="text"><string>New</string></property></widget></item><item><widget class="QPushButton" name="btnSaveProfile"><property name="text"><string>Save / Update</string></property><property name="styleSheet"><string notr="true">background-color: #F9942A; color: white; font-weight: bold; min-height: 30px;</string></property></widget></item><item><widget class="QPushButton" name="btnDeleteProfile"><property name="text"><string>Delete</string></property><property name="styleSheet"><string notr="true">background-color: #DC3545; color: white; font-weight: bold; min-height: 30px;</string></property></widget></item></layout></item><item><layout class="QVBoxLayout" name="lay4"><item><widget class="QLabel" name="lblProfileCamera"><property name="text"><string>Linked Camera Source:</string></property></widget></item><item><widget class="QComboBox" name="comboProfileCamera" /></item></layout></item><item><layout class="QVBoxLayout" name="profileEdgeXLayout"><item><widget class="QLabel" name="lblProfileEdgeXDevice"><property name="text"><string>EdgeX Device Name (bn):</string></property></widget></item>
+<item><widget class="QComboBox" name="comboEdgeXDevice" /></item>
+<item><widget class="QLabel" name="lblProfileEdgeXProfile"><property name="text"><string>Device Profile:</string></property></widget></item>
+<item><widget class="QComboBox" name="comboEdgeXProfile" /></item>
+</layout></item><item><spacer name="vSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer></item></layout><property name="maximumSize"><size><width>380</width><height>16777215</height></size></property></widget></item></layout></widget>
+      <widget class="QWidget" name="cameraSourcesPage">
+       <layout class="QVBoxLayout" name="cameraSourcesLayout">
+        <item>
+         <widget class="QLabel" name="label_5">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Configure Camera Sources</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="tableSources">
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectRows</enum>
+          </property>
+          <column>
+           <property name="text">
+            <string>Name</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Type</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>URI / Path / Index</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="sourceButtonsLayout">
+          <item>
+           <widget class="QPushButton" name="btnAddSource">
+            <property name="text">
+             <string>Add Source</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnEditSource">
+            <property name="text">
+             <string>Edit Selected</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnDeleteSource">
+            <property name="text">
+             <string>Delete Selected</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupSourceEdit">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="title">
+           <string>Edit Source Configuration</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_2">
+           <item>
+            <layout class="QFormLayout" name="formSourceEdit">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_6">
+               <property name="text">
+                <string>Friendly Name:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="editSourceName" />
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_7">
+               <property name="text">
+                <string>Source Type:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QComboBox" name="comboSourceType">
+               <item>
+                <property name="text">
+                 <string>USB Camera</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>RTSP Stream</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Video File</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_4">
+             <item>
+              <widget class="QLabel" name="label_8">
+               <property name="text">
+                <string>Configuration:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QStackedWidget" name="stackSourceConfig">
+               <widget class="QWidget" name="pageUSB">
+                <layout class="QHBoxLayout" name="horizontalLayout_2">
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QSpinBox" name="spinUSBIndex" />
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="lblUSBHint">
+                   <property name="text">
+                    <string>(Device Index)</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="horizontalSpacer_3">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </widget>
+               <widget class="QWidget" name="pageRTSP">
+                <layout class="QHBoxLayout" name="horizontalLayout_5">
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QLineEdit" name="editRTSPUrl">
+                   <property name="placeholderText">
+                    <string>rtsp://ip:port/stream</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+               <widget class="QWidget" name="pageFile">
+                <layout class="QHBoxLayout" name="horizontalLayout_3">
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QLineEdit" name="editFilePath" />
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="btnBrowseFile">
+                   <property name="text">
+                    <string>Browse...</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="saveButtonLayout">
+             <item>
+              <spacer name="horizontalSpacer_4">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnSaveSource">
+               <property name="minimumSize">
+                <size>
+                 <width>120</width>
+                 <height>35</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">QPushButton { background-color: #28A745; color: white; font-weight: bold; border-radius: 4px; } QPushButton:hover { background-color: #218838; }</string>
+               </property>
+               <property name="text">
+                <string>Save Changes</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ <resources />
+ <connections />
+</ui>

@@ -162,28 +162,25 @@
             </font>
            </property>
           </item>
+           <item>
+            <property name="text">
+             <string>AI Runtime</string>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>14</pointsize>
+             </font>
+            </property>
+           </item>
          </widget>
         </item>
         <item>
-         <spacer name="verticalSpacer">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>20</width>
-            <height>40</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item>
          <widget class="QPushButton" name="btnSettings">
-          <property name="text">
-           <string>Settings</string>
-          </property>
           <property name="styleSheet">
            <string notr="true">QPushButton { background-color: transparent; color: #555555; text-align: left; padding-left: 20px; border: none; font-size: 14px; font-weight: 500; height: 40px; margin: 5px; } QPushButton:hover { background-color: #FFF9D5; color: #F9942A; }</string>
+          </property>
+          <property name="text">
+           <string>Settings</string>
           </property>
          </widget>
         </item>

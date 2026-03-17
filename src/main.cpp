@@ -7,8 +7,8 @@ int main(int argc, char *argv[])
 {
     qDebug() << "Starting application...";
     QApplication a(argc, argv);
-    a.setApplicationName("EdgeX Qt Console");
-    a.setOrganizationName("EdgeX-UI");
+    a.setApplicationName("AIManager");
+    a.setOrganizationName("Axelera");
 
     // Load Theme from Resources
     QFile file(":/ModernTheme.qss");

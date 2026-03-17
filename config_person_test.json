@@ -1,0 +1,7 @@
+{
+    "modelPath": "/data/voyager-sdk/ax_models/zoo/yolo/object_detection/yolov8n-coco-onnx.yaml",
+    "label_filter": [0],
+    "edgexDeviceName": "Aetina-Person-Sensor",
+    "edgexProfileName": "PersonCount",
+    "senmlTemplate": "[{\"bn\":\"<device_base_name>\",\"timestamp\":\"<UTC timestamp>\",\"n\":\"person_count\",\"u\":\"count\",\"v\":<face_count>},{\"bn\":\"<device_base_name>\",\"timestamp\":\"<UTC timestamp>\",\"n\":\"detected_persons\",\"u\":\"names\",\"vs\":\"<recognized_names>\"},{\"bn\":\"<device_base_name>\",\"timestamp\":\"<UTC timestamp>\",\"n\":\"avg_confidence\",\"u\":\"%\",\"v\":<confidence>}]"
+}

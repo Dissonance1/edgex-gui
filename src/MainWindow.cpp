@@ -11,11 +11,14 @@
 #include "RulesEngineView.h"
 #include "DataIngestionServer.h"
 #include "NotificationToast.h"
+#include "AIRuntimeView.h"
 
 #include "SettingsDialog.h"
 #include "ConfigManager.h"
 
 #include <QMenuBar>
+#include <QComboBox>
+#include <QListWidgetItem>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -54,7 +57,71 @@ MainWindow::MainWindow(QWidget *parent)
     ui->centralStack->addWidget(notifView);
     connect(this, &MainWindow::notificationsUpdated, notifView, &NotificationView::refresh);
     // ui->centralStack->addWidget(new AppServicesView());    // 8
-    ui->centralStack->addWidget(new RulesEngineView());    // 9 (Actually 7)
+    ui->centralStack->addWidget(new RulesEngineView());    // 7
+    ui->centralStack->addWidget(new AIRuntimeView());      // 8
+    
+    // AI Runtime sidebar: collapsible header using plain QListWidgetItem + Unicode arrow
+    // Find the existing UI-defined "AI Runtime" item
+    for (int i = 0; i < ui->navPanel->count(); ++i) {
+        if (ui->navPanel->item(i)->text() == "AI Runtime") {
+            m_aiNavItem = ui->navPanel->item(i);
+            break;
+        }
+    }
+    if (!m_aiNavItem) {
+        m_aiNavItem = new QListWidgetItem();
+        ui->navPanel->addItem(m_aiNavItem);
+    }
+
+    // Use Unicode arrow as suffix — QSS theme styles this natively
+    m_aiNavItem->setText("AI Runtime  \u25BE"); // ▾ small down-pointing triangle
+
+    // Sub-items (added after the header row)
+    struct SubItem { QString label; int page; };
+    QList<SubItem> subItems = {
+        {"Live Monitoring",     0},
+        {"Model Settings",      1},
+        {"Camera Sources",      2},
+        {"EdgeX Configuration", 3}
+    };
+
+    for (const auto &si : subItems) {
+        QListWidgetItem *item = new QListWidgetItem("   \u203A " + si.label); // ›
+        item->setData(Qt::UserRole,     si.page);
+        item->setData(Qt::UserRole + 1, true);   // mark as AI sub-item
+        item->setHidden(true);
+        ui->navPanel->addItem(item);
+        m_aiSubItems.append(item);
+    }
+
+    // Toggle expand/collapse when the header item is clicked
+    connect(ui->navPanel, &QListWidget::itemClicked, [this](QListWidgetItem *item) {
+        if (!item) return;
+
+        // Header clicked → toggle
+        if (item == m_aiNavItem) {
+            m_aiExpanded = !m_aiExpanded;
+            item->setText(m_aiExpanded ? "AI Runtime  \u25B4"   // ▴ up
+                                       : "AI Runtime  \u25BE"); // ▾ down
+            for (auto *it : m_aiSubItems)
+                it->setHidden(!m_aiExpanded);
+            // Switch to AI Runtime view and default to Live Monitoring
+            if (m_aiExpanded) {
+                ui->centralStack->setCurrentIndex(8);
+                auto *aiView = qobject_cast<AIRuntimeView*>(ui->centralStack->widget(8));
+                if (aiView) aiView->onNavItemChanged(0);
+            }
+            return;
+        }
+
+        // Sub-item clicked → switch page
+        if (item->data(Qt::UserRole + 1).toBool()) {
+            int page = item->data(Qt::UserRole).toInt();
+            ui->centralStack->setCurrentIndex(8);
+            auto *aiView = qobject_cast<AIRuntimeView*>(ui->centralStack->widget(8));
+            if (aiView) aiView->onNavItemChanged(page);
+        }
+    });
 
     connect(dashView, &DashboardView::viewAllNotificationsRequested, [this]() {
         // Find "Notifications" in navPanel and select it
@@ -122,6 +189,15 @@ void MainWindow::onNavItemChanged(int index)
     QListWidgetItem *item = ui->navPanel->item(index);
     if (!item) return;
 
+    // Check if this item has a widget (our QComboBox)
+    QWidget *widget = ui->navPanel->itemWidget(item);
+    if (widget) {
+        // If it's a QComboBox, its signal already handles the stack change.
+        // We just ensure the stack shows the AI Runtime view.
+        ui->centralStack->setCurrentIndex(8);
+        return;
+    }
+
     QString text = item->text();
     if (text == "Dashboard") ui->centralStack->setCurrentIndex(0);
     else if (text == "Devices") ui->centralStack->setCurrentIndex(1);
@@ -129,9 +205,7 @@ void MainWindow::onNavItemChanged(int index)
     else if (text == "Device Profiles") ui->centralStack->setCurrentIndex(3);
     else if (text == "Events & Readings") ui->centralStack->setCurrentIndex(4);
     else if (text == "System Status") ui->centralStack->setCurrentIndex(5);
-    // else if (text == "Scheduler") ui->centralStack->setCurrentIndex(6);
     else if (text == "Notifications") ui->centralStack->setCurrentIndex(6);
-    // else if (text == "App Services") ui->centralStack->setCurrentIndex(8);
     else if (text == "Rules Engine") ui->centralStack->setCurrentIndex(7);
 }
 

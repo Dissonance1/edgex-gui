@@ -1,0 +1,11 @@
+{
+  "streams": [
+    {
+      "id": 1,
+      "cameraSource": "usb:20",
+      "modelPath": "/data/voyager-sdk/ax_models/zoo/yolo/object_detection/yolov8n-coco-onnx.yaml",
+      "confidenceThreshold": 0.5,
+      "aipuCores": "4"
+    }
+  ]
+}

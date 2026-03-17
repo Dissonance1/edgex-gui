@@ -1,6 +1,6 @@
 {
     "id": "face_detection_notification",
-    "sql": "SELECT readings[0].value as confidence, deviceName, origin FROM EdgeXStream WHERE profileName = \"face_recog\" AND CAST(readings[0].value, \"float\") > 0.6",
+    "sql": "SELECT CAST(confidence, \"float\") AS confidence, meta(deviceName) AS deviceName, meta(origin) AS origin FROM FaceStream WHERE meta(profileName) = \"face_recog\" AND CAST(confidence, \"float\") > 0.6",
     "actions": [
         {
             "log": {}

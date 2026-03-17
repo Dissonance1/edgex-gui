@@ -5,9 +5,16 @@
 #include <QListWidget>
 #include <QStackedWidget>
 #include <QTimer>
+#include <QToolButton>
+#include <QMenu>
+#include <QListWidgetItem>
+#include <QLabel>
+#include <QHBoxLayout>
+#include <QEvent>
 #include "SupportClient.h"
 
 class DataIngestionServer;
+class AIRuntimeView;
 
 namespace Ui {
 class MainWindow;
@@ -43,6 +50,11 @@ private:
     SupportClient *m_pollClient;
     QTimer *m_pollTimer;
     QString m_lastNotificationId;
+
+    // AI Runtime sidebar navigation
+    QListWidgetItem          *m_aiNavItem  = nullptr;
+    QList<QListWidgetItem*>   m_aiSubItems;
+    bool                      m_aiExpanded = false;
 };
 
 #endif // MAINWINDOW_H

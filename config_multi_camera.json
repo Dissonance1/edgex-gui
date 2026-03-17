@@ -1,0 +1,36 @@
+{
+  "streams": [
+    {
+      "id": 1,
+      "cameraSource": "usb:0",
+      "modelPath": "yolov8n-coco-onnx",
+      "confidenceThreshold": 0.5,
+      "aipuCores": "0,1",
+      "edgeX": {
+        "deviceName": "Gate-01",
+        "profileName": "AI-Entry",
+        "template": [
+          {
+            "n": "confidence",
+            "v": 0
+          },
+          {
+            "n": "recognized_names",
+            "v": ""
+          },
+          {
+            "n": "DeviceName",
+            "v": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "cameraSource": "usb:1",
+      "modelPath": "yolov8n-coco-onnx",
+      "confidenceThreshold": 0.6,
+      "aipuCores": "2,3"
+    }
+  ]
+}
