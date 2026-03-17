@@ -615,6 +615,27 @@ def run_command_server(port, fallback):
                     else:
                         conn.sendall(b"IDLE\n")
 
+                elif cmd == "shutdown":
+                    logger.info("Shutdown requested — full backend exit")
+                    _stop_event.set()
+                    _running = False
+                    with _stream_lock:
+                        if _stream is not None:
+                            try:
+                                _stream.stop()
+                            except Exception:
+                                pass
+                            _stream = None
+                    conn.sendall(b"SHUTTING_DOWN\n")
+
+                elif cmd == "status":
+                    with _stream_lock:
+                        running = _stream is not None
+                    conn.sendall(b"RUNNING\n" if running else b"IDLE\n")
+
+                else:
+                    conn.sendall(b"UNKNOWN_COMMAND\n")
+
                 conn.close()
             except socket.timeout:
                 continue

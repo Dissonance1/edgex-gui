@@ -102,8 +102,7 @@ private slots:
     void onBrowseTemplate();
     void onValidateFile();
     void onUploadEdgeXTemplate();
-    void onEdgeXDeviceChanged(int index);
-    void onEdgeXProfileChanged(int index);
+    void onEdgeXDeviceChanged(const QString &text);
 
 private:
     void setupLivePanel();
@@ -132,7 +131,6 @@ private:
     QJsonArray m_discoveredProfiles;
 
     QString m_requestedDeviceName;
-    QString m_requestedProfileName;
 };
 
 #endif // AIRUNTIMEVIEW_H

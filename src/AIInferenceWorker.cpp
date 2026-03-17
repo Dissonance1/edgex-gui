@@ -5,10 +5,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QTcpSocket>
+#include <QProcess>
+#include <QFile>
 #include <mutex>
 
 AIInferenceWorker::AIInferenceWorker(const QJsonObject& config, QObject *parent)
-    : QThread(parent), m_config(config), m_isRunning(false)
+    : QThread(parent), m_config(config), m_isRunning(false), m_backendLaunched(false)
 {
 }
 
@@ -17,28 +19,71 @@ AIInferenceWorker::~AIInferenceWorker()
     stop();
 }
 
-static bool sendServerCommand(const QString& host, int port, const QString& cmd, QString& response)
+static bool sendServerCommand(const QString& host, int port, const QString& cmd, QString& response, int timeoutMs = 2000)
 {
     QTcpSocket sock;
     sock.connectToHost(host, port);
-    if (!sock.waitForConnected(2000)) {
+    if (!sock.waitForConnected(timeoutMs)) {
+        response = sock.errorString();
         return false;
     }
     sock.write(cmd.toUtf8());
     sock.flush();
-    if (sock.waitForReadyRead(2000)) {
+    if (sock.waitForReadyRead(timeoutMs)) {
         response = QString::fromUtf8(sock.readAll()).trimmed();
     }
     sock.disconnectFromHost();
     return true;
 }
 
+static bool tryAutoLaunchBackend() {
+    const QStringList candidates = {
+        "/data/edgex-gui/start_backend.sh",
+        "/workspaces/edgex-gui/start_backend.sh",
+        "./start_backend.sh"
+    };
+
+    for (const QString &path : candidates) {
+        if (!QFile::exists(path)) continue;
+
+        // make executable if needed
+        QFile file(path);
+        if (!file.permissions().testFlag(QFile::ExeUser)) {
+            QFile::Permissions perms = file.permissions() | QFile::ExeUser;
+            file.setPermissions(perms);
+        }
+
+        bool ok = QProcess::startDetached("bash", QStringList() << "-c" << QString("bash %1").arg(path));
+        if (ok) {
+            qDebug() << "[AIInferenceWorker] launched backend script:" << path;
+            return true;
+        }
+    }
+
+    qDebug() << "[AIInferenceWorker] no backend script found to launch.";
+    return false;
+}
+
 void AIInferenceWorker::stop()
 {
     m_isRunning = false;
     QString response;
-    sendServerCommand("127.0.0.1", 5567, "stop", response);
-    qDebug() << "[AIInferenceWorker] stop command sent, server responded:" << response;
+    if (sendServerCommand("127.0.0.1", 5567, "stop", response, 2000)) {
+        qDebug() << "[AIInferenceWorker] stop command sent, server responded:" << response;
+    } else {
+        qDebug() << "[AIInferenceWorker] stop command failed:" << response;
+    }
+
+    if (m_backendLaunched) {
+        QString shutdownResp;
+        if (sendServerCommand("127.0.0.1", 5567, "shutdown", shutdownResp, 2000)) {
+            qDebug() << "[AIInferenceWorker] shutdown command sent, server responded:" << shutdownResp;
+        } else {
+            qDebug() << "[AIInferenceWorker] shutdown command failed:" << shutdownResp;
+        }
+        m_backendLaunched = false;
+    }
+
     wait();
 }
 
@@ -51,20 +96,40 @@ void AIInferenceWorker::run()
 
     QString response;
     bool started = false;
-    for (int i=0; i<5; ++i) {
-        if (sendServerCommand("127.0.0.1", 5567, startCmd, response)) {
+    bool autoLaunched = false;
+
+    for (int i = 0; i < 20; ++i) {
+        if (sendServerCommand("127.0.0.1", 5567, startCmd, response, 2000)) {
             if (response == "OK" || response == "ALREADY_RUNNING") {
                 started = true;
                 break;
             }
+            qDebug() << "[AIInferenceWorker] command server replied:" << response;
+        } else {
+            qDebug() << "[AIInferenceWorker] connect to 5567 failed:" << response;
         }
+
+        if (i == 3 && !autoLaunched) {
+            emit logMessage("Port 5567 not reachable, attempting to launch backend script...");
+            autoLaunched = tryAutoLaunchBackend();
+            if (autoLaunched) {
+                emit logMessage("Backend launch requested, waiting for command server to appear...");
+            }
+        }
+
         QThread::msleep(1000);
     }
 
     if (!started) {
-        emit errorOccurred("Could not connect to inference server on port 5567.");
+        QString hint = "Could not connect to inference server on port 5567. Ensure backend is running (axelera_server).";
+        if (!autoLaunched) {
+            hint += " Try running start_backend.sh or startup.sh first.";
+        }
+        emit errorOccurred(hint);
         return;
     }
+
+    m_backendLaunched = autoLaunched;
 
     emit logMessage(QString("Inference started. Model: %1")
         .arg(m_config["modelPath"].toString().section('/', -1)));

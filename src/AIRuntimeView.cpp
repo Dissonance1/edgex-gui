@@ -30,24 +30,16 @@ AIRuntimeView::AIRuntimeView(QWidget *parent) :
     // Connect metadata client signals
     connect(m_metadataClient, &MetadataClient::devicesReceived, this, [this](const QJsonArray &devices) {
         m_discoveredDevices = devices;
-        // Restore saved device from QSettings
+        // Restore saved device from QSettings into profile field
         QSettings s;
         QString savedDevice = s.value("edgex/last_device").toString();
-        int idx = ui->comboEdgeXDevice->findText(savedDevice);
-        if (idx >= 0) ui->comboEdgeXDevice->setCurrentIndex(idx);
+        if (!savedDevice.isEmpty()) {
+            ui->editEdgeXDeviceName->setText(savedDevice);
+        }
     });
 
     connect(m_metadataClient, &MetadataClient::deviceProfilesReceived, this, [this](const QJsonArray &profiles) {
         m_discoveredProfiles = profiles;
-        for (const auto &val : profiles) {
-            QString name = val.toObject()["name"].toString();
-            ui->comboEdgeXProfile->addItem(name);
-        }
-        // Restore saved profile from QSettings
-        QSettings s;
-        QString savedProfile = s.value("edgex/last_profile").toString();
-        int idx = ui->comboEdgeXProfile->findText(savedProfile);
-        if (idx >= 0) ui->comboEdgeXProfile->setCurrentIndex(idx);
     });
 
     // Initial setup
@@ -112,8 +104,7 @@ AIRuntimeView::AIRuntimeView(QWidget *parent) :
     connect(ui->comboActiveProfile, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIRuntimeView::onProfileSelectionChanged);
     
     // EdgeX Selection Persistence (Profile-based now)
-    connect(ui->comboEdgeXDevice, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIRuntimeView::onEdgeXDeviceChanged);
-    connect(ui->comboEdgeXProfile, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIRuntimeView::onEdgeXProfileChanged);
+    connect(ui->editEdgeXDeviceName, &QLineEdit::textChanged, this, &AIRuntimeView::onEdgeXDeviceChanged);
 
     // Misc
     connect(ui->comboSourceType, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIRuntimeView::onSourceTypeChanged);
@@ -176,8 +167,16 @@ void AIRuntimeView::startInference()
     // Send AIPU cores — backend accepts "0,1,2,3" or "4" (count)
     configJson["aipuCores"]           = ui->editAipuCores->text();
     configJson["cameraSource"]        = sourceValue;
-    configJson["edgexDeviceName"]     = ui->comboEdgeXDevice->currentText();
-    configJson["edgexProfileName"]    = ui->comboEdgeXProfile->currentText();
+
+    // EdgeX Device Name (bn) is now stored in the inference profile
+    if (profileIdx >= 0 && profileIdx < m_profiles.size()) {
+        configJson["edgexDeviceName"]  = m_profiles[profileIdx].edgexDeviceName;
+        configJson["edgexProfileName"] = m_profiles[profileIdx].edgexProfileName;
+    } else {
+        configJson["edgexDeviceName"]  = "";
+        configJson["edgexProfileName"] = "";
+    }
+
     configJson["classMapPath"]        = ui->editClassMapPath->text();
     configJson["embeddingPath"]       = ui->editEmbeddingPath->text();
 
@@ -338,15 +337,11 @@ void AIRuntimeView::onProfileSelectionChanged(int index)
     ui->editEmbeddingPath->setText(p.embeddingPath);
     ui->comboModelZoo->setCurrentText(p.modelZooName);
     m_requestedDeviceName = p.edgexDeviceName;
-    m_requestedProfileName = p.edgexProfileName;
 
     if (!m_requestedDeviceName.isEmpty()) {
-        int idx = ui->comboEdgeXDevice->findText(m_requestedDeviceName);
-        if (idx >= 0) ui->comboEdgeXDevice->setCurrentIndex(idx);
-    }
-    if (!m_requestedProfileName.isEmpty()) {
-        int idx = ui->comboEdgeXProfile->findText(m_requestedProfileName);
-        if (idx >= 0) ui->comboEdgeXProfile->setCurrentIndex(idx);
+        ui->editEdgeXDeviceName->setText(m_requestedDeviceName);
+    } else {
+        ui->editEdgeXDeviceName->clear();
     }
 }
 
@@ -373,8 +368,7 @@ void AIRuntimeView::onSaveProfile()
     p.classMapPath = ui->editClassMapPath->text();
     p.embeddingPath = ui->editEmbeddingPath->text();
     p.modelZooName = ui->comboModelZoo->currentText();
-    p.edgexDeviceName = ui->comboEdgeXDevice->currentText();
-    p.edgexProfileName = ui->comboEdgeXProfile->currentText();
+    p.edgexDeviceName = ui->editEdgeXDeviceName->text();
     
     // Update combo boxes
     int currentProfilesIdx = ui->comboProfiles->currentIndex();
@@ -418,7 +412,6 @@ void AIRuntimeView::loadSettings()
     
     // Load global EdgeX defaults
     m_requestedDeviceName = s.value("edgex/last_device").toString();
-    m_requestedProfileName = s.value("edgex/last_profile").toString();
 
     // Restore last profile index
     int lastIdx = s.value("last_profile_index", 0).toInt();
@@ -608,7 +601,12 @@ void AIRuntimeView::onValidateFile()
     }
 
     // Check against selected profile
-    QString profileName = ui->comboEdgeXProfile->currentText();
+    int activeIdx = ui->comboActiveProfile->currentIndex();
+    QString profileName;
+    if (activeIdx >= 0 && activeIdx < m_profiles.size()) {
+        profileName = m_profiles[activeIdx].edgexProfileName;
+    }
+
     QJsonObject selectedProfile;
     for (int i=0; i<m_discoveredProfiles.size(); ++i) {
         if (m_discoveredProfiles[i].toObject()["name"].toString() == profileName) {
@@ -653,40 +651,19 @@ void AIRuntimeView::onUploadEdgeXTemplate()
     }
 }
 
-void AIRuntimeView::onEdgeXDeviceChanged(int index)
+void AIRuntimeView::onEdgeXDeviceChanged(const QString &text)
 {
-    if (index < 0) return;
-    QString name = ui->comboEdgeXDevice->itemText(index);
-    if (name.isEmpty()) return;
-    
+    QString name = text.trimmed();
     m_requestedDeviceName = name;
-    
+
     QSettings s;
     s.setValue("edgex/last_device", name);
     s.sync();
-    
-    // Also update current profile if one is selected
+
     int profIdx = ui->comboProfiles->currentIndex();
     if (profIdx >= 0 && profIdx < m_profiles.size()) {
         m_profiles[profIdx].edgexDeviceName = name;
     }
 }
 
-void AIRuntimeView::onEdgeXProfileChanged(int index)
-{
-    if (index < 0) return;
-    QString name = ui->comboEdgeXProfile->itemText(index);
-    if (name.isEmpty()) return;
-    
-    m_requestedProfileName = name;
-    
-    QSettings s;
-    s.setValue("edgex/last_profile", name);
-    s.sync();
-    
-    // Also update current profile if one is selected
-    int profIdx = ui->comboProfiles->currentIndex();
-    if (profIdx >= 0 && profIdx < m_profiles.size()) {
-        m_profiles[profIdx].edgexProfileName = name;
-    }
-}
+
