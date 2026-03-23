@@ -15,6 +15,8 @@ FILES_TO_SYNC=(
     "test_single.json"
     "CMakeLists.txt"
     "setup_axelera_env.sh"
+    "test_start.py"
+    "start_backend.sh"
 )
 
 echo "--- Cleaning up legacy files on Aetina ($TARGET_IP) ---"

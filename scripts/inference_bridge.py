@@ -95,7 +95,7 @@ class SHMWriter:
         buf.fill(0, data.tobytes())
         self.src.emit("push-buffer", buf)
 
-def run_bridge(model_yaml, source, shm_socket="/tmp/ax_bridge/shm.sock"):
+def run_bridge(model_yaml, source, shm_socket="/tmp/ax_bridge/shm.sock", cores="4"):
 
     meta_server = MetadataServer()
     meta_server.start()
@@ -108,7 +108,7 @@ def run_bridge(model_yaml, source, shm_socket="/tmp/ax_bridge/shm.sock"):
         "--display", "none", 
         "--pipe", "gst",
         "--metis", "m2",
-        "--aipu-cores", "4"
+        "--aipu-cores", str(cores)
     ]
     network_yaml_info = yaml_parser.get_network_yaml_info()
     parser = config.create_inference_argparser(network_yaml_info)
@@ -122,7 +122,7 @@ def run_bridge(model_yaml, source, shm_socket="/tmp/ax_bridge/shm.sock"):
 
     stream = create_inference_stream(sys_cfg, inf_cfg, pipe_cfg, log_cfg, dep_cfg)
 
-    LOG.info(f"Bridge started. Source: {source}, Model: {model_yaml}, SHM: {shm_socket}")
+    LOG.info(f"Bridge started. Source: {source}, Model: {model_yaml}, SHM: {shm_socket}, Cores: {cores}")
     
     try:
         for frame_result in stream:
@@ -160,6 +160,8 @@ def run_bridge(model_yaml, source, shm_socket="/tmp/ax_bridge/shm.sock"):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: inference_bridge.py <model.yaml> <source>")
+        print("Usage: inference_bridge.py <model.yaml> <source> [cores]")
         sys.exit(1)
-    run_bridge(sys.argv[1], sys.argv[2])
+    
+    cores = sys.argv[3] if len(sys.argv) > 3 else "4"
+    run_bridge(sys.argv[1], sys.argv[2], cores=cores)

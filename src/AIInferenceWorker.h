@@ -29,6 +29,7 @@ protected:
 private:
     QJsonObject m_config;
     std::atomic<bool> m_isRunning;
+    bool m_backendLaunched;
 };
 
 #endif // AIINFERENCEWORKER_H

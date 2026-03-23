@@ -17,3 +17,7 @@ runtime_logs.txt
 # OS files
 .DS_Store
 Thumbs.db
+*:Zone.Identifier
+
+# Python
+__pycache__/

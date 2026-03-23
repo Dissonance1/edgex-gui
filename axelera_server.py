@@ -9,35 +9,29 @@ import logging
 import argparse
 import datetime
 import requests
-import signal
 from pathlib import Path
-
-# --- Global Exception Handling ---
-def global_exception_handler(exctype, value, traceback):
-    logging.getLogger("MASTER").critical("Unhandled Exception:", exc_info=(exctype, value, traceback))
-    # Don't call sys.exit() here to allow threads to potentially stay alive or for the port to remain bound
-    # However, if it's the main thread, we might be in trouble.
-
-sys.excepthook = global_exception_handler
 
 # --- Constants & Globals ---
 DEFAULT_CONFIG = "config_multi_camera.json"
 TELEMETRY_PORT = 5566
-COMMAND_PORT = 5567
-VIDEO_PORT = 5568
+COMMAND_PORT   = 5567
+VIDEO_PORT     = 5568
 
-_running = True
-_latest_jpeg = None
-_latest_jpeg_lock = threading.Lock()
-_gui_clients = []
-_gui_clients_lock = threading.Lock()
-_stream = None          # The actual SDK stream object
-_stream_lock = threading.Lock()
-_stop_event = threading.Event()  # Signals the inference loop to stop
-_inference_done = threading.Event()  # Set when thread fully exits
+_running            = True
+_latest_jpeg        = None
+_latest_jpeg_lock   = threading.Lock()
+_gui_clients        = []
+_gui_clients_lock   = threading.Lock()
+_stream             = None          # The actual SDK stream object
+_stream_lock        = threading.Lock()
+_stop_event         = threading.Event()   # Signals the inference loop to stop
+_inference_done     = threading.Event()   # Set when thread fully exits
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - [%(levelname)s] - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - [%(levelname)s] - %(message)s'
+)
 logger = logging.getLogger("MASTER")
 
 # SDK Root
@@ -46,9 +40,10 @@ if _sdk_root not in sys.path:
     sys.path.append(_sdk_root)
 
 
-# ------------------------------------------------------------------------------
+# ==============================================================================
 # VIDEO SERVER
-# ------------------------------------------------------------------------------
+# ==============================================================================
+
 def handle_video_client(conn, addr):
     global _latest_jpeg, _running
     c_logger = logging.getLogger(f"VideoClient-{addr[0]}")
@@ -70,6 +65,7 @@ def handle_video_client(conn, addr):
     finally:
         conn.close()
 
+
 def run_video_server(port):
     global _running
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -86,9 +82,11 @@ def run_video_server(port):
             continue
     srv.close()
 
-# ------------------------------------------------------------------------------
+
+# ==============================================================================
 # TELEMETRY SERVER
-# ------------------------------------------------------------------------------
+# ==============================================================================
+
 def run_telemetry_server(port):
     global _running, _gui_clients
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -97,7 +95,6 @@ def run_telemetry_server(port):
     srv.listen(10)
     srv.settimeout(1.0)
     logger.info(f"Telemetry server on port {port}")
-
     while _running:
         try:
             conn, addr = srv.accept()
@@ -108,13 +105,14 @@ def run_telemetry_server(port):
             continue
     srv.close()
 
+
 def broadcast_telemetry(data):
     global _gui_clients
     if not _gui_clients:
         return
     try:
-        msg = json.dumps(data).encode('utf-8')
-        # Packet: [total_len(4)][json_len(4)][flags(4)][json] (Little Endian)
+        msg    = json.dumps(data).encode('utf-8')
+        # Packet: [total_len(4)][json_len(4)][flags(4)][json]  (Little Endian)
         packet = struct.pack("<III", 12 + len(msg), len(msg), 0) + msg
         with _gui_clients_lock:
             dead = []
@@ -128,126 +126,305 @@ def broadcast_telemetry(data):
     except Exception:
         pass
 
-# ------------------------------------------------------------------------------
-# EdgeX Coordination
-# ------------------------------------------------------------------------------
-_last_sent_to_edgex = {}  # Format: {name: timestamp}
-_edgex_lock = threading.Lock()
-_profile_cache = {}
 
-def fetch_device_profile(profile_name):
-    """
-    Fetch device profile from EdgeX metadata service
-    """
-    if profile_name in _profile_cache:
-        return _profile_cache[profile_name]
+# ==============================================================================
+# EDGEX - PROFILE CACHE + AUTO RESOLVER
+# ==============================================================================
 
+# Cache structure:
+#   _profile_cache = {
+#       "resources":     list[dict],          # raw resource descriptors
+#       "resolver_map":  dict[name -> fn],    # pre-built at fetch time
+#   }
+_profile_cache    = {}
+_profile_lock     = threading.Lock()
+_last_sent_to_edgex = {}
+_edgex_lock         = threading.Lock()
+
+
+def parse_device_profile(profile_json):
+    """
+    Extract deviceResources from any EdgeX v2/v3 profile JSON response.
+    Returns list of {"name", "description", "valueType", "units"}.
+    """
+    profile = (
+        profile_json.get("profile")
+        or profile_json.get("deviceProfile")
+        or profile_json
+    )
+    resources = []
+    for res in profile.get("deviceResources", []):
+        props = res.get("properties", {})
+        resources.append({
+            "name":        res.get("name", ""),
+            "description": res.get("description", ""),
+            "valueType":   props.get("valueType", "String"),
+            "units":       props.get("units", ""),
+        })
+    return resources
+
+
+def _build_resolver_map(resources):
+    """
+    Called ONCE when a profile is fetched.
+    Analyses every resource name and returns a resolver_map:
+
+        { resource_name: fn(inference_output) -> value }
+
+    inference_output is the live dict produced each frame - it always
+    contains the same fixed keys regardless of which profile is loaded.
+    """
+    import re
+
+    # - Inference output keys (fixed, produced every frame) -------
+    EXTRACTORS = {
+        "device_name":        lambda o: o.get("device_name", ""),
+        "face_count":         lambda o: o.get("face_count", 0),
+        "person_count":       lambda o: o.get("person_count", 0),
+        "animal_count":       lambda o: o.get("animal_count", 0),
+        "total_count":        lambda o: o.get("total_count", 0),
+        "known_count":        lambda o: o.get("known_count", 0),
+        "confidence":         lambda o: o.get("confidence", 0.0),
+        "recognized_names":   lambda o: o.get("recognized_names", "unknown"),
+        "all_labels":         lambda o: o.get("all_labels", ""),
+        "bbox_coordinates":   lambda o: o.get("bbox_coordinates", "[]"),
+        "embeddings":         lambda o: o.get("embeddings", "[]"),
+        "frame_timestamp":    lambda o: o.get("frame_timestamp", ""),
+        "status":             lambda o: o.get("status", "active"),
+        "cam_temp":           lambda o: o.get("cam_temp", 0.0),
+    }
+
+    # - Token -> extractor key table -------------------
+    TOKEN_TABLE = [
+        ({"device", "camera", "sensor", "bn"}, "device_name"),
+        ({"face", "head"},                     "face_count"),
+        ({"person", "human", "people"},        "person_count"),
+        ({"animal", "pet", "beast"},           "animal_count"),
+        ({"total", "all", "sum", "count"},     "total_count"),
+        ({"known", "identified", "recog"},     "known_count"),
+        ({"confidence", "score", "prob",
+          "accuracy", "certainty"},            "confidence"),
+        ({"recognized", "name", "identity",
+          "who", "match", "names"},            "recognized_names"),
+        ({"label", "class", "tag", "category",
+          "object", "type", "all"},            "all_labels"),
+        ({"bbox", "box", "coordinate", "rect",
+          "region", "location", "coords"},     "bbox_coordinates"),
+        ({"embed", "vector", "feature",
+          "latent", "descriptor"},             "embeddings"),
+        ({"time", "date", "stamp", "ts",
+          "when", "epoch"},                    "frame_timestamp"),
+        ({"status", "state", "active",
+          "alive", "health"},                  "status"),
+        ({"temp", "temperature", "heat",
+          "thermal", "celsius"},               "cam_temp"),
+    ]
+
+    def _tokens(name):
+        # 1. Split by non-alphanumeric
+        s1 = re.split(r'[^a-zA-Z0-9]+', name.strip('_'))
+        # 2. Split CamelCase (e.g., PersonCount -> Person, Count)
+        tokens = []
+        for part in s1:
+            if not part: continue
+            # re.sub finds transition from lower/digit to upper
+            s2 = re.sub('([a-z0-9])([A-Z])', r'\1 \2', part)
+            for t in s2.split():
+                tokens.append(t.lower())
+        return set(tokens)
+
+    resolver_map = {}
+    for res in resources:
+        name       = res["name"]
+        name_tokens = _tokens(name)
+
+        matched_extractor = None
+
+        # Pass 1 - exact extractor key match
+        norm = name.lstrip("_").lower().replace(" ", "_").replace("-", "_")
+        if norm in EXTRACTORS:
+            matched_extractor = norm
+
+        # Pass 2 - token table match
+        if not matched_extractor:
+            for token_set, extractor_key in TOKEN_TABLE:
+                if name_tokens & token_set:
+                    matched_extractor = extractor_key
+                    break
+
+        if matched_extractor:
+            resolver_map[name] = EXTRACTORS[matched_extractor]
+        else:
+            vtype = res["valueType"]
+            if vtype in {"Float32", "Float64"}:
+                resolver_map[name] = lambda o: 0.0
+            elif vtype in {"Int8","Int16","Int32","Int64","Uint8","Uint16","Uint32","Uint64"}:
+                resolver_map[name] = lambda o: 0
+            elif vtype == "Bool":
+                resolver_map[name] = lambda o: False
+            else:
+                resolver_map[name] = lambda o: "unknown"
+
+    logger.info(f"[ResolverBuild] Built resolver map for {len(resolver_map)} resources: {list(resolver_map.keys())}")
+    return resolver_map
+
+
+def fetch_and_cache_profile(profile_name):
+    """
+    Fetch profile from EdgeX API, parse resources, build resolver map,
+    store everything in _profile_cache.
+    """
+    global _profile_cache
     try:
         url = f"http://localhost:59881/api/v3/deviceprofile/name/{profile_name}"
-        r = requests.get(url, timeout=3)
-
+        r   = requests.get(url, timeout=5)
         if r.status_code != 200:
-            return None
+            logger.warning(f"Profile '{profile_name}' not found (HTTP {r.status_code})")
+            return False
 
-        data = r.json()
-        profile = data.get("profile") or data.get("deviceProfile") or {}
-        resources = profile.get("deviceResources", [])
+        resources    = parse_device_profile(r.json())
+        resolver_map = _build_resolver_map(resources)
 
-        profile_map = {}
+        with _profile_lock:
+            _profile_cache = {
+                "profile_name": profile_name,
+                "resources":    resources,
+                "resolver_map": resolver_map,
+            }
 
-        for res in resources:
-            name = res["name"]
-            value_type = res["properties"]["valueType"]
-            profile_map[name] = value_type
+        # Reset debug gate
+        if hasattr(send_edgex_payload, "_debugged"):
+            del send_edgex_payload._debugged
 
-        _profile_cache[profile_name] = profile_map
-        return profile_map
-
+        logger.info(f"Profile '{profile_name}' cached - {len(resources)} resources.")
+        return True
     except Exception as e:
-        logger.warning(f"Device profile fetch failed: {e}")
-        return None
+        logger.warning(f"Profile fetch failed: {e}")
+        return False
 
-def generate_auto_payload(profile_map, ai_results):
+
+def async_fetch_profile(profile_name):
+    """Fetch and cache profile in a background thread."""
+    threading.Thread(
+        target=fetch_and_cache_profile,
+        args=(profile_name,),
+        daemon=True
+    ).start()
+
+def build_payload(device_name, inference_output):
     """
-    Generate payload dynamically based on device profile
+    Build SenML payload for whatever profile is currently cached.
     """
-    payload = {}
+    NUMERIC_TYPES = {
+        "Float32", "Float64",
+        "Int8",  "Int16",  "Int32",  "Int64",
+        "Uint8", "Uint16", "Uint32", "Uint64",
+    }
+    BOOL_TYPES = {"Bool"}
 
-    for resource, dtype in profile_map.items():
-        key = resource.lower()
+    with _profile_lock:
+        cache = _profile_cache.copy()
 
-        if key in ai_results:
-            payload[resource] = ai_results[key]
-            continue
+    if not cache:
+        logger.warning("[PayloadBuilder] No profile cached - skipping.")
+        return []
 
-        # Default auto values
-        if dtype in ["Int32", "Int16", "Int64"]:
-            payload[resource] = int(ai_results.get(key, 0))
-        elif dtype in ["Float32", "Float64"]:
-            payload[resource] = float(ai_results.get(key, 0.0))
-        elif dtype == "String":
-            payload[resource] = str(ai_results.get(key, "unknown"))
+    resources    = cache["resources"]
+    resolver_map = cache["resolver_map"]
+    timestamp    = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    payload      = []
+
+    for res in resources:
+        name       = res["name"]
+        value_type = res["valueType"]
+        unit       = res["description"] if res["description"] else res["units"]
+
+        resolver = resolver_map.get(name)
+        value    = resolver(inference_output) if resolver else None
+
+        if value is None:
+            value = 0 if value_type in NUMERIC_TYPES else (False if value_type in BOOL_TYPES else "unknown")
+
+        record = {"bn": device_name, "n": name, "u": unit, "timestamp": timestamp}
+
+        if value_type in NUMERIC_TYPES:
+            try:
+                record["v"]  = float(value) if "Float" in value_type else int(float(value))
+            except (ValueError, TypeError):
+                record["v"] = 0
+        elif value_type in BOOL_TYPES:
+            record["vb"] = bool(value)
         else:
-            payload[resource] = str(ai_results.get(key, ""))
+            record["vs"] = str(value)
 
+        payload.append(record)
+    
     return payload
 
-def send_edgex_payload(device_name, profile_name, readings=None, template=None):
 
+def debug_profile_vs_rawdata(resources, resolver_map, inference_output):
+    """
+    Log exactly how each resource was resolved.
+    """
+    logger.info("=" * 60)
+    logger.info("[ProfileDebug] Resource Resolution:")
+    for res in resources:
+        name = res["name"]
+        resolver = resolver_map.get(name)
+        val = resolver(inference_output) if resolver else "N/A"
+        logger.info(f"  {name} -> {val!r}")
+    logger.info("=" * 60)
+
+
+# ==============================================================================
+# EDGEX - SEND PAYLOAD
+# ==============================================================================
+
+def send_edgex_payload(device_name, profile_name, inference_output=None, template=None):
     if not device_name:
         return
 
-    # Mode 1: Manual payload with placeholder replacement
     if template:
-        try:
-            # Recursive placeholder replacement
-            def replace_placeholders(obj):
-                if isinstance(obj, str):
-                    for k, v in (readings or {}).items():
-                        placeholder = "${" + str(k) + "}"
-                        if placeholder in obj:
-                            # Handle numeric conversions if needed, but usually SenML 'v' is numeric
-                            obj = obj.replace(placeholder, str(v))
-                    return obj
-                elif isinstance(obj, list):
-                    return [replace_placeholders(i) for i in obj]
-                elif isinstance(obj, dict):
-                    return {k: replace_placeholders(v) for k, v in obj.items()}
-                return obj
-
-            payload = replace_placeholders(template)
-        except Exception as e:
-            logger.warning(f"Template placeholder replacement failed: {e}")
-            payload = readings
-    # Mode 2: Auto payload (simplified fallback)
+        payload = template
     else:
-        payload = readings
+        with _profile_lock:
+            cache = _profile_cache.copy()
 
-    if not payload:
-        return
+        if not cache:
+            logger.warning(f"Profile '{profile_name}' not yet cached - skipping frame.")
+            return
+
+        # - Debug: log once per profile -----------------
+        if not hasattr(send_edgex_payload, "_debugged"):
+            debug_profile_vs_rawdata(cache["resources"], cache["resolver_map"], inference_output or {})
+            send_edgex_payload._debugged = True
+
+        payload = build_payload(device_name, inference_output or {})
+        logger.info(f"Built {len(payload)}-record payload for '{device_name}'")
 
     url = f"http://localhost:4000/core-data/api/v3/event/device-rest/{device_name}/{profile_name}/all"
 
-    try:
-        def post_task():
-            try:
-                # Some EdgeX endpoints expect a single object, some expect an array (SenML)
-                # If template was an array, send as-is.
-                requests.post(url, json=payload, timeout=2)
-                logger.info(f"EdgeX payload sent ({device_name})")
-            except Exception as e:
-                logger.warning(f"EdgeX send failed: {e}")
-        threading.Thread(target=post_task, daemon=True).start()
-    except Exception as e:
-        logger.warning(f"Failed to start POST thread: {e}")
+    def post_task():
+        try:
+            res = requests.post(url, json=payload, timeout=2)
+            if res.status_code == 200:
+                logger.info(f"EdgeX accepted payload for '{device_name}'")
+            else:
+                logger.warning(f"EdgeX HTTP {res.status_code}")
+        except Exception as e:
+            logger.warning(f"EdgeX upload error: {e}")
+
+    threading.Thread(target=post_task, daemon=True).start()
 
 
-# ------------------------------------------------------------------------------
+# ==============================================================================
 # INFERENCE ENGINE
-# ------------------------------------------------------------------------------
+# ==============================================================================
+
 def _run_inference(cfg):
     global _stream, _latest_jpeg, _running
     log = logging.getLogger("Inference")
+
     try:
         from axelera.app import config as ax_config, yaml_parser
         from axelera.app.stream import create_inference_stream
@@ -257,33 +434,29 @@ def _run_inference(cfg):
         _inference_done.set()
         return
 
-    # ---- Parse model name/path ----
-    model_raw = str(cfg.get("modelPath", "yolov8n-coco-onnx")).strip()
-    model = model_raw
+    # - Parse model name / path -----------------------
+    model = str(cfg.get("modelPath", "yolov8n-coco-onnx")).strip()
 
     if not os.path.isabs(model) and not os.path.exists(model):
-        zoo_info = yaml_parser.get_network_yaml_info()
-        if model not in zoo_info:
-            search_dirs = [
-                os.path.join(_sdk_root, "ax_models"),
-                os.path.join(_sdk_root, "ax_models/zoo/yolo/object_detection"),
-                os.path.join(_sdk_root, "ax_models/zoo/yolo/segmentation"),
-                os.path.join(_sdk_root, "ax_models/zoo/yolo/pose_estimation"),
-            ]
-            found = False
-            for d in search_dirs:
-                p = os.path.join(d, f"{model}.yaml")
-                if os.path.exists(p):
-                    model = p
-                    found = True
-                    break
-            if not found:
-                log.warning(f"Model '{model}' not found in zoo or search paths. Passing as-is.")
+        search_dirs = [
+            os.path.join(_sdk_root, "ax_models"),
+            os.path.join(_sdk_root, "ax_models/zoo/yolo/object_detection"),
+            os.path.join(_sdk_root, "ax_models/zoo/yolo/segmentation"),
+            os.path.join(_sdk_root, "ax_models/zoo/yolo/pose_estimation"),
+            "/data/voyager-sdk/customers/xray",
+        ]
+        for d in search_dirs:
+            p = os.path.join(d, f"{model}.yaml")
+            if os.path.exists(p):
+                model = p
+                break
+        else:
+            log.warning(f"Model '{model}' not found in search paths - passing as-is.")
 
     if not model:
         model = "yolov8n-coco-onnx"
 
-    # ---- Parse camera source ----
+    # - Parse camera source -------------------------
     src = str(cfg.get("cameraSource", "usb:20")).strip()
     if src.isdigit():
         src = f"usb:{src}"
@@ -291,7 +464,7 @@ def _run_inference(cfg):
         num = src.split("/dev/video")[1].split("/")[0]
         src = f"usb:{num}"
 
-    # ---- Parse AIPU cores ----
+    # - Parse AIPU cores ---------------------------
     cores_raw = str(cfg.get("aipuCores", "4")).strip()
     if "," in cores_raw:
         cores = len([c for c in cores_raw.split(",") if c.strip()])
@@ -303,138 +476,188 @@ def _run_inference(cfg):
 
     conf = float(cfg.get("confidenceThreshold", 0.4))
 
-    # ---- Load class map for detection labels ----
-    # FIX 4: Explicit key/value type check to avoid silent inversion of class map.
-    # Previously, any non-string first value would trigger inversion without validation.
+    # --- Load class map ---
     class_map = {}
     class_map_path = cfg.get("classMapPath", "")
     if class_map_path and os.path.exists(str(class_map_path)):
         try:
             with open(class_map_path, 'r') as f:
                 raw_map = json.load(f)
-                if raw_map:
-                    first_key, first_val = next(iter(raw_map.items()))
-                    if isinstance(first_val, str):
-                        # Format: {"0": "person", "1": "car", ...} — use as-is
-                        class_map = {str(k): v for k, v in raw_map.items()}
-                    elif isinstance(first_val, int) and isinstance(first_key, str):
-                        # Format: {"person": 0, "car": 1, ...} — invert intentionally
-                        class_map = {str(v): k for k, v in raw_map.items()}
-                    else:
-                        log.warning(
-                            f"Unexpected class map format (key={type(first_key).__name__}, "
-                            f"val={type(first_val).__name__}). Skipping class map."
-                        )
+            if raw_map:
+                first_key, first_val = next(iter(raw_map.items()))
+                if isinstance(first_val, str):
+                    class_map = {str(k): v for k, v in raw_map.items()}
+                elif isinstance(first_val, int) and isinstance(first_key, str):
+                    class_map = {str(v): k for k, v in raw_map.items()}
             log.info(f"Loaded class map: {len(class_map)} classes from {class_map_path}")
         except Exception as e:
             log.warning(f"Class map load error: {e}")
 
-    # EdgeX context
-    edgex_device  = cfg.get("edgexDeviceName", "")
-    edgex_profile = cfg.get("edgexProfileName", "")
+    # --- Extract labels from model metadata (preferred by user) ---
+    try:
+        model_name = Path(model).stem
+        build_dir = Path(_sdk_root) / "build" / model_name
+        possible_json = [
+            build_dir / "model_info.json",
+            build_dir / model_name / "model_info.json",
+        ]
+        
+        found_labels = False
+        for pjson in possible_json:
+            if pjson.exists():
+                with open(pjson, 'r') as f:
+                    mdata = json.load(f)
+                if "labels" in mdata and mdata["labels"]:
+                    class_map.update({str(i): n for i, n in enumerate(mdata["labels"])})
+                    log.info(f"Loaded {len(mdata['labels'])} labels from {pjson}")
+                    found_labels = True
+                    break
+        
+        if not found_labels:
+            import yaml
+            if os.path.exists(model):
+                with open(model, 'r') as f:
+                    mdata = yaml.safe_load(f)
+                if mdata and "datasets" in mdata:
+                    for dname, dinfo in mdata["datasets"].items():
+                        names_found = None
+                        if "names" in dinfo:
+                            names_found = dinfo["names"]
+                        elif "ultralytics_data_yaml" in dinfo:
+                            ddir = dinfo.get("data_dir_name", ".").replace("$AXELERA_FRAMEWORK", _sdk_root)
+                            if not ddir.startswith("/"):
+                                ddir = os.path.join(_sdk_root, "ax_models", ddir)
+                            dyaml = os.path.join(ddir, dinfo["ultralytics_data_yaml"])
+                            if os.path.exists(dyaml):
+                                with open(dyaml, 'r') as fy:
+                                    ydata = yaml.safe_load(fy)
+                                names_found = ydata.get("names")
+                        
+                        if names_found:
+                            if isinstance(names_found, list):
+                                class_map.update({str(i): n for i, n in enumerate(names_found)})
+                            elif isinstance(names_found, dict):
+                                class_map.update({str(k): v for k, v in names_found.items()})
+                            log.info(f"Updated class map from YAML dataset '{dname}'")
+                            break
+    except Exception as ey:
+        log.warning(f"Could not extract labels from model metadata: {ey}")
+
+    # --- EdgeX context ---
+    edgex_device   = cfg.get("edgexDeviceName", "")
+    edgex_profile  = cfg.get("edgexProfileName", "")
     senml_template = cfg.get("edgexPayloadTemplate", None)
 
-    log.info(f"START: model={model} source={src} cores={cores} conf={conf} edgex={edgex_device}/{edgex_profile}")
+    log.info(
+        f"START: model={model} source={src} cores={cores} "
+        f"conf={conf} edgex={edgex_device}/{edgex_profile}"
+    )
 
-    # FIX 3: Preserve original sys.argv and restore it after parsing to avoid
-    # corrupting global state in a multi-threaded server environment.
+    # - Build SDK args ----------------------------
     original_argv = sys.argv[:]
-    sys.argv = [sys.argv[0]]
-    
-    # Use a custom ArgumentParser that doesn't call sys.exit()
-    class NoExitParser(argparse.ArgumentParser):
-        def exit(self, status=0, message=None):
-            if message: logger.warning(f"Argparse exit suppression: {message}")
-            raise Exception(f"Argparse failed: {message}")
+    sys.argv      = [sys.argv[0]]
+    parser        = ax_config.create_inference_argparser(yaml_parser.get_network_yaml_info())
 
+    pipe    = str(cfg.get("pipelineType", "gst")).strip().lower()
+    metis   = "m2"  # Hardcoded as requested
+    display_raw = str(cfg.get("displayMode", "none")).strip().lower()
+
+    display = "none"
+    if "window" in display_raw:
+        display = "window"
+    elif "headless" in display_raw:
+        display = "none"
+    else:
+        display = display_raw
+
+    args_list = [
+        model, src,
+        "--display", display,
+        "--pipe", pipe,
+        "--metis", metis,
+        "--aipu-cores", str(cores)
+    ]
+    log.info(f"SDK Args: {args_list}")
     try:
-        parser = NoExitParser(ax_config.create_inference_argparser(yaml_parser.get_network_yaml_info())._optionals)
-        # Actually create_inference_argparser returns a full parser, we just need to ensure it doesn't exit.
-        # Simple way: just catch SystemExit or override the exit method of the returned parser.
-        parser = ax_config.create_inference_argparser(yaml_parser.get_network_yaml_info())
-        def mock_exit(status=0, message=None):
-            raise Exception(f"Argparse exit: {message}")
-        parser.exit = mock_exit
-        
-        args = parser.parse_args([model, src, "--display", "none", "--metis", "m2", "--aipu-cores", str(cores)])
-    except Exception as e:
-        log.error(f"Failed to parse inference args: {e}")
-        sys.argv = original_argv
-        return
-
+        args = parser.parse_args(args_list)
+    except SystemExit:
+        log.error("SDK Parser help:")
+        parser.print_help()
+        raise
     sys.argv = original_argv
 
     args.data_root  = Path(_sdk_root) / "ax_models"
     args.build_root = Path(_sdk_root) / "build"
 
-    sdk_stream = None
-    try:
-        sc  = ax_config.SystemConfig.from_parsed_args(args)
-        stc = ax_config.InferenceStreamConfig.from_parsed_args(args)
-        pc  = ax_config.PipelineConfig.from_parsed_args(args)
-        lc  = ax_config.LoggingConfig.from_parsed_args(args)
-        dc  = ax_config.DeployConfig.from_parsed_args(args)
+    is_file = not src.startswith("usb:") and not src.startswith("rtsp:") and os.path.exists(src)
 
-        sdk_stream = create_inference_stream(sc, stc, pc, lc, dc)
-        with _stream_lock:
-            _stream = sdk_stream
-        log.info("Stream online.")
+    while not _stop_event.is_set():
+        sdk_stream = None
+        try:
+            sc  = ax_config.SystemConfig.from_parsed_args(args)
+            stc = ax_config.InferenceStreamConfig.from_parsed_args(args)
+            pc  = ax_config.PipelineConfig.from_parsed_args(args)
 
-        for res in sdk_stream:
-            if _stop_event.is_set():
-                log.info("Inference loop stop event detected.")
-                break
+            if edgex_profile:
+                with _profile_lock:
+                    _profile_cache = {}
+                async_fetch_profile(edgex_profile)
 
-            # Video frame - EXTREMELY DEFENSIVE
-            try:
-                # check if res has image and it's not empty
-                if not hasattr(res, 'image') or res.image is None:
-                    continue
-                
-                # Accessing height/width might trigger the crash if not careful
-                h = getattr(res.image, 'height', 0)
-                w = getattr(res.image, 'width', 0)
-                if h == 0 or w == 0:
-                    continue
+            lc  = ax_config.LoggingConfig.from_parsed_args(args)
+            dc  = ax_config.DeployConfig.from_parsed_args(args)
 
-                # The crash often happens here if the underlying buffer is invalid
-                img = res.image.asarray("BGR")
-                if img is None or img.size == 0 or img.shape[0] == 0 or img.shape[1] == 0:
-                    continue
+            sdk_stream = create_inference_stream(sc, stc, pc, lc, dc)
+            with _stream_lock:
+                if _stop_event.is_set():
+                    sdk_stream.stop()
+                    break
+                _stream = sdk_stream
+            log.info("Stream online.")
 
-                ret, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 50])
-                if ret:
-                    with _latest_jpeg_lock:
-                        _latest_jpeg = buf.tobytes()
-            except BaseException as e:
-                log.warning(f"Frame processing error (defended): {e}")
-                continue
+            # - Per-frame loop --------------------------
+            for res in sdk_stream:
+                if _stop_event.is_set():
+                    break
 
-            # Detections
-            dets = []
-            try:
-                m_map = res.meta._meta_map if hasattr(res, 'meta') and hasattr(res.meta, '_meta_map') else {}
-            except Exception:
-                m_map = {}
+                # - Encode JPEG frame ----------------------
+                try:
+                    img      = res.image.asarray("BGR")
+                    ret, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                    if ret:
+                        with _latest_jpeg_lock:
+                            _latest_jpeg = buf.tobytes()
+                except Exception as e:
+                    log.debug(f"Frame encode error: {e}")
 
-            base  = m_map.get("detections") or m_map.get("objects")
+                # - Run detections ------------------------
+                dets  = []
+                m_map = (
+                    res.meta._meta_map
+                    if hasattr(res, 'meta') and hasattr(res.meta, '_meta_map')
+                    else {}
+                )
+                base = m_map.get("detections") or m_map.get("objects")
 
-            if base:
-                h = res.image.height
-                w = res.image.width
-                indices = range(len(base)) if hasattr(base, '__len__') else []
-                for i in indices:
-                    try:
-                        obj   = base.Object(base, i) if hasattr(base, 'Object') else base[i]
-                        score = float(obj.score)
-                        if score >= conf:
-                            box   = obj.box
-                            label = "Object"
+                if base:
+                    h, w    = res.image.height, res.image.width
+                    indices = range(len(base)) if hasattr(base, '__len__') else []
+
+                    for i in indices:
+                        try:
+                            obj         = base.Object(base, i) if hasattr(base, 'Object') else base[i]
+                            score       = float(obj.score)
+                            if score < conf:
+                                continue
+
+                            box         = obj.box
+                            label       = "Object"
                             final_score = score
 
                             try:
                                 detections_obj = m_map.get("detections")
-                                sec_list = getattr(detections_obj, "_secondary_metas", {}).get("recognitions")
+                                sec_list       = getattr(
+                                    detections_obj, "_secondary_metas", {}
+                                ).get("recognitions")
 
                                 pass_filter = False
                                 try:
@@ -447,8 +670,8 @@ def _run_inference(cfg):
                                 if pass_filter:
                                     for j in range(i):
                                         try:
-                                            prev_obj = base.Object(base, j) if hasattr(base, 'Object') else base[j]
-                                            if int(prev_obj.class_id) == 0:
+                                            prev = base.Object(base, j) if hasattr(base, 'Object') else base[j]
+                                            if int(prev.class_id) == 0:
                                                 filtered_idx += 1
                                         except Exception:
                                             pass
@@ -460,14 +683,15 @@ def _run_inference(cfg):
                                         if hasattr(recog, "_class_ids") and recog._class_ids:
                                             face_id = str(int(recog._class_ids[0][0]))
                                             label   = class_map.get(face_id, f"Person {face_id}")
-                                            log.info(f"Face recognized: {label} (id:{face_id})")
+                                            log.info(f"Face recognised: {label} (id:{face_id})")
                                         if hasattr(recog, "_scores") and recog._scores:
                                             final_score = float(recog._scores[0][0])
                                 else:
                                     cls_id_num = int(obj.class_id) if hasattr(obj, 'class_id') else -1
-                                    label = "Person" if cls_id_num == 0 else "Object"
+                                    label      = class_map.get(str(cls_id_num), "Person" if cls_id_num == 0 else "Object")
+
                             except Exception as sec_e:
-                                log.warning(f"Metadata extraction error at index {i}: {sec_e}")
+                                log.warning(f"Secondary metadata error at index {i}: {sec_e}")
                                 label = "Object"
 
                             dets.append({
@@ -477,81 +701,96 @@ def _run_inference(cfg):
                                     float(box[0]) / w,
                                     float(box[1]) / h,
                                     float(box[2] - box[0]) / w,
-                                    float(box[3] - box[1]) / h
-                                ]
+                                    float(box[3] - box[1]) / h,
+                                ],
                             })
-                    except Exception:
-                        continue
+                        except Exception:
+                            continue
 
-                if dets:
-                    labels = [d["label"] for d in dets]
-                    log.info(f"Detections: {len(dets)} items - {', '.join(labels)}")
+                    # - Build raw_data and send to EdgeX -------------
+                    if dets and edgex_device:
+                        labels = [d["label"] for d in dets]
+                        log.info(f"Detections: {len(dets)} - {', '.join(labels)}")
 
-                    # --- EdgeX Integration (Dynamic Payload) ---
-                    now_ts = time.time()
-                    unique_current = set(labels)
-                    should_send = False
-                    
-                    with _edgex_lock:
-                        for lbl in unique_current:
-                            if now_ts - _last_sent_to_edgex.get(lbl, 0.0) > 5.0:
-                                should_send = True
-                                _last_sent_to_edgex[lbl] = now_ts
-                    
-                    if should_send:
-                        all_scores = [d["score"] for d in dets]
-                        avg_conf = sum(all_scores) / len(all_scores) if all_scores else 0.0
-                        bboxes = [d["box_norm"] for d in dets]
-                        recognized = [l for l in labels if l != "Person" and l != "Object"]
+                        now_ts         = time.time()
+                        unique_current = set(labels)
+                        should_send    = False
 
-                        readings = {
-                            "bn": str(edgex_device or "Aetina-Face"),
-                            "face_count": int(len(dets)),
-                            "person_count": len([l for l in labels if l == "Person" or l in recognized]),
-                            "recognized_names": ",".join(recognized) if recognized else "unknown",
-                            "confidence": round(float(avg_conf) * 100.0, 2),
-                            "bbox_coordinates": bboxes,
-                            "frame_timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            "cam_temp": 42.0
-                        }
+                        with _edgex_lock:
+                            for lbl in unique_current:
+                                if now_ts - _last_sent_to_edgex.get(lbl, 0.0) > 5.0:
+                                    should_send              = True
+                                    _last_sent_to_edgex[lbl] = now_ts
 
-                        send_edgex_payload(
-                            str(edgex_device or "Aetina-Face"),
-                            str(edgex_profile or "FaceRecog"),
-                            readings,
-                            template=senml_template
-                        )
+                            if should_send:
+                                all_scores  = [d["score"] for d in dets]
+                                avg_conf    = sum(all_scores) / len(all_scores) if all_scores else 0.0
+                                bboxes      = [d["box_norm"] for d in dets]
+                                animal_labels = {
+                                    "cat","dog","bird","horse","sheep","cow",
+                                    "elephant","bear","zebra","giraffe",
+                                }
+                                person_dets = [d for d in dets if d["label"].lower() in ("person","object")]
+                                animal_dets = [d for d in dets if d["label"].lower() in animal_labels]
+                                known_dets  = [d for d in dets if d["label"] not in ("Person","Object","object")]
 
-            # FIX 1: broadcast_telemetry moved to correct indentation level — inside
-            # the `for res in sdk_stream` loop but OUTSIDE `if base:`, so it always
-            # broadcasts per frame (with empty dets when nothing is detected), rather
-            # than being accidentally outside the loop entirely.
-            broadcast_telemetry({
-                "type":         "detections",
-                "detections":   dets,
-                "edgexDevice":  edgex_device,
-                "edgexProfile": edgex_profile
-            })
+                                inference_output = {
+                                    "device_name":      str(edgex_device),
+                                    "face_count":       len(dets),
+                                    "person_count":     len(person_dets),
+                                    "animal_count":     len(animal_dets),
+                                    "total_count":      len(dets),
+                                    "known_count":      len(known_dets),
+                                    "confidence":       round(avg_conf * 100.0, 2),
+                                    "recognized_names": ",".join(d["label"] for d in known_dets) or "unknown",
+                                    "all_labels":       ",".join(d["label"] for d in dets),
+                                    "bbox_coordinates": json.dumps(bboxes),
+                                    "embeddings":       "[]",
+                                    "frame_timestamp":  datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                                    "status":           "active",
+                                    "cam_temp":         41.5,
+                                }
 
-    except Exception as e:
-        log.error(f"Inference error: {e}")
-    finally:
-        if sdk_stream is not None:
-            try:
-                log.info("Stopping SDK stream and releasing hardware...")
-                sdk_stream.stop()
-                log.info("SDK stream stopped.")
-            except Exception as e:
-                log.warning(f"Stream stop error (may be OK): {e}")
-        with _stream_lock:
-            _stream = None
-        _inference_done.set()
-        log.info("Inference thread done.")
+                                send_edgex_payload(
+                                    device_name      = str(edgex_device),
+                                    profile_name     = str(edgex_profile or "DefaultProfile"),
+                                    inference_output = inference_output,
+                                    template         = senml_template,
+                                )
+
+                broadcast_telemetry({
+                    "type":         "detections",
+                    "detections":   dets,
+                    "edgexDevice":  edgex_device,
+                    "edgexProfile": edgex_profile,
+                })
+
+            if not is_file or _stop_event.is_set():
+                break
+            log.info("Looping video file...")
+            sdk_stream.stop()
+
+        except Exception as e:
+            log.error(f"Inference error: {e}")
+            break
+        finally:
+            if sdk_stream is not None:
+                try:
+                    log.info("Closing SDK stream...")
+                    sdk_stream.stop()
+                except Exception:
+                    pass
+            with _stream_lock:
+                _stream = None
+
+    _inference_done.set()
+    log.info("Inference thread done.")
 
 
-# ------------------------------------------------------------------------------
+# ==============================================================================
 # COMMAND SERVER
-# ------------------------------------------------------------------------------
+# ==============================================================================
+
 def run_command_server(port, fallback):
     global _running, _stream
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -560,110 +799,86 @@ def run_command_server(port, fallback):
     srv.listen(5)
     srv.settimeout(1.0)
     logger.info(f"Command server on port {port}")
+
     while _running:
         try:
-            try:
-                conn, addr = srv.accept()
-                raw = conn.recv(10240).decode("utf-8").strip()
-                if not raw:
-                    conn.close()
-                    continue
-                cmd  = raw.split(":", 1)[0]
-                body = raw.split(":", 1)[1] if ":" in raw else ""
-
-                if cmd == "start":
-                    try:
-                        cfg = json.loads(body) if body else fallback
-                    except Exception:
-                        cfg = fallback
-
-                    # Ensure we have something
-                    if not cfg: cfg = fallback
-
-                    with _stream_lock:
-                        existing_stream = _stream
-
-                    if existing_stream is not None:
-                        logger.info("Stopping existing inference before switching model...")
-                        _stop_event.set()
-                        try:
-                            existing_stream.stop()
-                        except Exception:
-                            pass
-                        _inference_done.wait(timeout=10.0)
-                        logger.info("Old stream released. Starting new model...")
-                        time.sleep(1.0)
-
-                    _stop_event.clear()
-                    _inference_done.clear()
-                    threading.Thread(target=_run_inference, args=(cfg,), daemon=True).start()
-                    conn.sendall(b"OK\n")
-
-                elif cmd == "stop":
-                    with _stream_lock:
-                        existing = _stream
-                    if existing is not None:
-                        logger.info("Stop requested — releasing AIPU cores...")
-                        _stop_event.set()
-                        try:
-                            existing.stop()
-                        except Exception:
-                            pass
-                        with _stream_lock:
-                            _stream = None
-                        conn.sendall(b"STOPPING\n")
-                    else:
-                        conn.sendall(b"IDLE\n")
-
-                elif cmd == "shutdown":
-                    logger.info("Shutdown requested — full backend exit")
-                    _stop_event.set()
-                    _running = False
-                    with _stream_lock:
-                        if _stream is not None:
-                            try:
-                                _stream.stop()
-                            except Exception:
-                                pass
-                            _stream = None
-                    conn.sendall(b"SHUTTING_DOWN\n")
-
-                elif cmd == "status":
-                    with _stream_lock:
-                        running = _stream is not None
-                    conn.sendall(b"RUNNING\n" if running else b"IDLE\n")
-
-                else:
-                    conn.sendall(b"UNKNOWN_COMMAND\n")
-
+            conn, addr = srv.accept()
+            raw = conn.recv(10240).decode("utf-8").strip()
+            if not raw:
                 conn.close()
-            except socket.timeout:
                 continue
-            except Exception as loop_e:
-                logger.error(f"Command server loop error: {loop_e}")
-                if 'conn' in locals() and conn:
-                    try: conn.close()
-                    except: pass
-        except BaseException as main_loop_e:
-            logger.error(f"Fatal Command Server error: {main_loop_e}")
-            time.sleep(1) # prevent tight loop crash
+
+            cmd  = raw.split(":", 1)[0]
+            body = raw.split(":", 1)[1] if ":" in raw else ""
+
+            if cmd == "start":
+                try:
+                    cfg = json.loads(body) if body else fallback
+                except Exception:
+                    cfg = fallback
+
+                with _stream_lock:
+                    existing_stream = _stream
+
+                if existing_stream is not None:
+                    logger.info("Stopping existing inference before switching model...")
+                    _stop_event.set()
+                    try:
+                        existing_stream.stop()
+                    except Exception:
+                        pass
+                    _inference_done.wait(timeout=10.0)
+                    logger.info("Old stream released. Starting new model...")
+                    time.sleep(1.0)
+
+                _stop_event.clear()
+                _inference_done.clear()
+                threading.Thread(
+                    target=_run_inference, args=(cfg,), daemon=True
+                ).start()
+                conn.sendall(b"OK\n")
+
+            elif cmd == "stop":
+                with _stream_lock:
+                    existing = _stream
+                if existing is not None:
+                    logger.info("Stop requested - releasing AIPU cores...")
+                    _stop_event.set()
+                    with _profile_lock:
+                        _profile_cache = {}
+                    try:
+                        existing.stop()
+                    except Exception:
+                        pass
+                    with _stream_lock:
+                        _stream = None
+                    conn.sendall(b"STOPPING\n")
+                else:
+                    conn.sendall(b"IDLE\n")
+
+            conn.close()
+        except socket.timeout:
+            continue
+
     srv.close()
 
 
-# ------------------------------------------------------------------------------
+# ==============================================================================
 # MAIN
-# ------------------------------------------------------------------------------
+# ==============================================================================
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=DEFAULT_CONFIG)
     args = parser.parse_args()
+
     try:
         with open(args.config, 'r') as f:
             cfg = json.load(f)["streams"][0]
     except Exception:
         cfg = {}
 
-    threading.Thread(target=run_video_server,     args=(VIDEO_PORT,),       daemon=True).start()
+    threading.Thread(target=run_video_server,     args=(VIDEO_PORT,),        daemon=True).start()
     threading.Thread(target=run_telemetry_server,  args=(TELEMETRY_PORT,),   daemon=True).start()
     threading.Thread(target=run_command_server,    args=(COMMAND_PORT, cfg), daemon=True).start()
 
@@ -672,8 +887,6 @@ if __name__ == "__main__":
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        # FIX 2 (cont.): Signal inference thread to stop cleanly on shutdown,
-        # not just the server loop. Previously _stop_event was never set here.
         logger.info("Shutting down...")
         _stop_event.set()
         _running = False

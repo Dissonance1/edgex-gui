@@ -81,8 +81,7 @@ MainWindow::MainWindow(QWidget *parent)
     QList<SubItem> subItems = {
         {"Live Monitoring",     0},
         {"Model Settings",      1},
-        {"Camera Sources",      2},
-        {"EdgeX Configuration", 3}
+        {"Camera Sources",      2}
     };
 
     for (const auto &si : subItems) {

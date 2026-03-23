@@ -30,16 +30,24 @@ AIRuntimeView::AIRuntimeView(QWidget *parent) :
     // Connect metadata client signals
     connect(m_metadataClient, &MetadataClient::devicesReceived, this, [this](const QJsonArray &devices) {
         m_discoveredDevices = devices;
+        ui->comboEdgeXDevice->clear();
+        for (const auto &dev : devices) {
+            ui->comboEdgeXDevice->addItem(dev.toObject()["name"].toString());
+        }
         // Restore saved device from QSettings into profile field
         QSettings s;
         QString savedDevice = s.value("edgex/last_device").toString();
         if (!savedDevice.isEmpty()) {
-            ui->editEdgeXDeviceName->setText(savedDevice);
+            ui->comboEdgeXDevice->setCurrentText(savedDevice);
         }
     });
 
     connect(m_metadataClient, &MetadataClient::deviceProfilesReceived, this, [this](const QJsonArray &profiles) {
         m_discoveredProfiles = profiles;
+        ui->comboEdgeXProfile->clear();
+        for (const auto &prof : profiles) {
+            ui->comboEdgeXProfile->addItem(prof.toObject()["name"].toString());
+        }
     });
 
     // Initial setup
@@ -104,7 +112,12 @@ AIRuntimeView::AIRuntimeView(QWidget *parent) :
     connect(ui->comboActiveProfile, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIRuntimeView::onProfileSelectionChanged);
     
     // EdgeX Selection Persistence (Profile-based now)
-    connect(ui->editEdgeXDeviceName, &QLineEdit::textChanged, this, &AIRuntimeView::onEdgeXDeviceChanged);
+    connect(ui->comboEdgeXDevice, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (index >= 0) onEdgeXDeviceChanged(ui->comboEdgeXDevice->itemText(index));
+    });
+    connect(ui->comboEdgeXProfile, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (index >= 0) onEdgeXProfileChanged(ui->comboEdgeXProfile->itemText(index));
+    });
 
     // Misc
     connect(ui->comboSourceType, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIRuntimeView::onSourceTypeChanged);
@@ -139,23 +152,18 @@ void AIRuntimeView::startInference()
     
     fflush(stderr);
 
-    // Camera Source — prefer profile, then selected camera, then first source
-    QString sourceValue = "usb:20";  // safe fallback
-    if (profileIdx >= 0 && profileIdx < m_profiles.size()) {
-        QString camName = m_profiles[profileIdx].cameraSourceName;
-        for (const auto &src : m_sources) {
-            if (src.name == camName) { sourceValue = src.value; break; }
+    // Camera Source — use the currently selected source from the UI dropdown
+    QString camName = ui->comboProfileCamera->currentText();
+    QString sourceValue = "usb:20"; // fallback
+    for (const auto &src : m_sources) {
+        if (src.name == camName) {
+            sourceValue = src.value;
+            break;
         }
-    } else {
-        // Use currently selected camera from comboProfileCamera
-        QString camName = ui->comboProfileCamera->currentText();
-        for (const auto &src : m_sources) {
-            if (src.name == camName) { sourceValue = src.value; break; }
-        }
-        // Last resort: first source in table
-        if (sourceValue == "usb:20" && !m_sources.isEmpty()) {
-            sourceValue = m_sources[0].value;
-        }
+    }
+
+    if (sourceValue == "usb:20" && !m_sources.isEmpty() && camName.isEmpty()) {
+        sourceValue = m_sources[0].value;
     }
     // Clean up old worker if present
     stopInference();
@@ -167,14 +175,37 @@ void AIRuntimeView::startInference()
     // Send AIPU cores — backend accepts "0,1,2,3" or "4" (count)
     configJson["aipuCores"]           = ui->editAipuCores->text();
     configJson["cameraSource"]        = sourceValue;
+    
+    // Configurable SDK parameters
+    configJson["metisDevice"] = "m2"; // Hardcoded m2 device
+    if (profileIdx >= 0 && profileIdx < m_profiles.size()) {
+        const auto &p = m_profiles[profileIdx];
+        configJson["pipelineType"] = p.pipelineType.isEmpty() ? ui->comboPipelineType->currentText() : p.pipelineType;
+        configJson["displayMode"]  = p.displayMode.isEmpty()  ? ui->comboDisplayMode->currentText()  : p.displayMode;
+    } else {
+        configJson["pipelineType"] = ui->comboPipelineType->currentText();
+        configJson["displayMode"]  = ui->comboDisplayMode->currentText();
+    }
+
+    // Validate mandatory EdgeX fields
+    QString edgexDevice = ui->comboEdgeXDevice->currentText();
+    QString edgexProfile = ui->comboEdgeXProfile->currentText();
+    QString edgexBnValue = ui->editSenmlBn->text().trimmed();
+
+    if (sourceValue.isEmpty() || edgexDevice.isEmpty() || edgexProfile.isEmpty() || edgexBnValue.isEmpty()) {
+        QMessageBox::warning(this, "Error", "Camera Source, EdgeX Target Device/Profile, and SenML Base Name (bn) are all mandatory.");
+        return;
+    }
 
     // EdgeX Device Name (bn) is now stored in the inference profile
     if (profileIdx >= 0 && profileIdx < m_profiles.size()) {
         configJson["edgexDeviceName"]  = m_profiles[profileIdx].edgexDeviceName;
         configJson["edgexProfileName"] = m_profiles[profileIdx].edgexProfileName;
+        configJson["edgexBn"]          = m_profiles[profileIdx].senmlBn;
     } else {
         configJson["edgexDeviceName"]  = "";
         configJson["edgexProfileName"] = "";
+        configJson["edgexBn"]          = "";
     }
 
     configJson["classMapPath"]        = ui->editClassMapPath->text();
@@ -265,11 +296,23 @@ void AIRuntimeView::onSaveSource()
         auto &src = m_sources[row];
         src.name = ui->editSourceName->text();
         src.type = ui->comboSourceType->currentText();
-        if (src.type == "USB Camera") src.value = "usb:" + QString::number(ui->spinUSBIndex->value());
-        else if (src.type == "RTSP Stream") src.value = ui->editRTSPUrl->text();
-        else src.value = ui->editFilePath->text();
+        
+        if (src.type == "USB Camera") {
+            src.value = "usb:" + QString::number(ui->spinUSBIndex->value());
+        } else if (src.type == "RTSP Stream") {
+            src.value = ui->editRTSPUrl->text();
+        } else if (src.type == "Video File") {
+            src.value = ui->editFilePath->text();
+        }
+        
         updateSourcesUI();
+        // Keep the same row selected after update
+        ui->tableSources->setCurrentCell(row, 0);
+        
+        saveSettings(); // Persist changes
         ui->groupSourceEdit->setEnabled(false);
+    } else {
+        QMessageBox::warning(this, "Save Error", "Please select a source to save changes.");
     }
 }
 
@@ -336,13 +379,20 @@ void AIRuntimeView::onProfileSelectionChanged(int index)
     ui->editClassMapPath->setText(p.classMapPath);
     ui->editEmbeddingPath->setText(p.embeddingPath);
     ui->comboModelZoo->setCurrentText(p.modelZooName);
+    ui->comboPipelineType->setCurrentText(p.pipelineType);
+    ui->comboDisplayMode->setCurrentText(p.displayMode);
+    ui->comboProfileCamera->setCurrentText(p.cameraSourceName);
+    
     m_requestedDeviceName = p.edgexDeviceName;
+    m_requestedProfileName = p.edgexProfileName;
 
     if (!m_requestedDeviceName.isEmpty()) {
-        ui->editEdgeXDeviceName->setText(m_requestedDeviceName);
-    } else {
-        ui->editEdgeXDeviceName->clear();
+        ui->comboEdgeXDevice->setCurrentText(m_requestedDeviceName);
     }
+    if (!m_requestedProfileName.isEmpty()) {
+        ui->comboEdgeXProfile->setCurrentText(m_requestedProfileName);
+    }
+    ui->editSenmlBn->setText(p.senmlBn);
 }
 
 void AIRuntimeView::onSaveProfile()
@@ -368,7 +418,18 @@ void AIRuntimeView::onSaveProfile()
     p.classMapPath = ui->editClassMapPath->text();
     p.embeddingPath = ui->editEmbeddingPath->text();
     p.modelZooName = ui->comboModelZoo->currentText();
-    p.edgexDeviceName = ui->editEdgeXDeviceName->text();
+    p.pipelineType = ui->comboPipelineType->currentText();
+    p.displayMode  = ui->comboDisplayMode->currentText();
+    
+    p.edgexDeviceName = ui->comboEdgeXDevice->currentText();
+    p.edgexProfileName = ui->comboEdgeXProfile->currentText();
+    p.senmlBn = ui->editSenmlBn->text().trimmed();
+
+    if (p.cameraSourceName.isEmpty() || p.edgexDeviceName.isEmpty() || 
+        p.edgexProfileName.isEmpty() || p.senmlBn.isEmpty()) {
+        QMessageBox::warning(this, "Error", "Camera Source, EdgeX Target Device/Profile, and SenML Base Name (bn) are all mandatory.");
+        return;
+    }
     
     // Update combo boxes
     int currentProfilesIdx = ui->comboProfiles->currentIndex();
@@ -387,6 +448,22 @@ void AIRuntimeView::onSaveProfile()
 void AIRuntimeView::loadSettings()
 {
     QSettings s;
+    
+    // Load Sources
+    int srcCount = s.beginReadArray("sources");
+    if (srcCount > 0) m_sources.clear(); // Only clear if we have saved sources
+    for (int i = 0; i < srcCount; ++i) {
+        s.setArrayIndex(i);
+        m_sources.append({
+            s.value("name").toString(),
+            s.value("type").toString(),
+            s.value("value").toString()
+        });
+    }
+    s.endArray();
+    updateSourcesUI();
+
+    // Load Profiles
     int count = s.beginReadArray("profiles");
     m_profiles.clear();
     ui->comboProfiles->clear();
@@ -402,8 +479,12 @@ void AIRuntimeView::loadSettings()
         p.classMapPath = s.value("class_map").toString();
         p.embeddingPath = s.value("embedding").toString();
         p.modelZooName = s.value("zoo_name").toString();
+        p.pipelineType = s.value("pipeline", "gst").toString();
+        p.displayMode  = s.value("display", "none").toString();
+        
         p.edgexDeviceName = s.value("edgex_device").toString();
         p.edgexProfileName = s.value("edgex_profile").toString();
+        p.senmlBn = s.value("senml_bn").toString();
         m_profiles.append(p);
         ui->comboProfiles->addItem(p.name);
         ui->comboActiveProfile->addItem(p.name);
@@ -426,6 +507,18 @@ void AIRuntimeView::loadSettings()
 void AIRuntimeView::saveSettings()
 {
     QSettings s;
+    
+    // Save Sources
+    s.beginWriteArray("sources");
+    for (int i = 0; i < m_sources.size(); ++i) {
+        s.setArrayIndex(i);
+        s.setValue("name", m_sources[i].name);
+        s.setValue("type", m_sources[i].type);
+        s.setValue("value", m_sources[i].value);
+    }
+    s.endArray();
+
+    // Save Profiles
     s.beginWriteArray("profiles");
     for (int i=0; i<m_profiles.size(); ++i) {
         s.setArrayIndex(i);
@@ -433,11 +526,15 @@ void AIRuntimeView::saveSettings()
         s.setValue("name", p.name);
         s.setValue("model", p.modelYamlPath);
         s.setValue("camera", p.cameraSourceName);
+        s.setValue("senml_bn", p.senmlBn);
         s.setValue("conf", p.confidence);
         s.setValue("cores", p.aipuCores);
         s.setValue("class_map", p.classMapPath);
         s.setValue("embedding", p.embeddingPath);
         s.setValue("zoo_name", p.modelZooName);
+        s.setValue("pipeline", p.pipelineType);
+        s.setValue("display", p.displayMode);
+        
         s.setValue("edgex_device", p.edgexDeviceName);
         s.setValue("edgex_profile", p.edgexProfileName);
     }
@@ -470,10 +567,23 @@ void AIRuntimeView::onFrameReceived(int streamId, const QImage &frame, const QJs
 }
 void AIRuntimeView::onWorkerLog(const QString &msg) { qDebug() << "[InferenceWorker]" << msg; }
 void AIRuntimeView::onErrorOccurred(const QString &e) { QMessageBox::critical(this, "Error", e); stopInference(); }
-void AIRuntimeView::addSource() { m_sources.append({"New", "USB Camera", "/dev/video20"}); updateSourcesUI(); }
+void AIRuntimeView::addSource() { 
+    m_sources.append({"New", "USB Camera", "usb:0"}); 
+    updateSourcesUI(); 
+    // Automatically select the new source
+    ui->tableSources->setCurrentCell(m_sources.size() - 1, 0);
+    ui->groupSourceEdit->setEnabled(true);
+}
 void AIRuntimeView::editSource() { ui->groupSourceEdit->setEnabled(true); }
-void AIRuntimeView::deleteSource() { int r = ui->tableSources->currentRow(); if (r>=0) { m_sources.removeAt(r); updateSourcesUI(); }}
-void AIRuntimeView::browseVideoFile() { QString f = QFileDialog::getOpenFileName(this); if (!f.isEmpty()) ui->editFilePath->setText(f); }
+void AIRuntimeView::deleteSource() { 
+    int r = ui->tableSources->currentRow(); 
+    if (r>=0) { 
+        m_sources.removeAt(r); 
+        updateSourcesUI(); 
+        saveSettings();
+    }
+}
+void AIRuntimeView::browseVideoFile() { QString f = QFileDialog::getOpenFileName(this, "Select Video File"); if (!f.isEmpty()) ui->editFilePath->setText(f); }
 void AIRuntimeView::onSourceTypeChanged(int i) { ui->stackSourceConfig->setCurrentIndex(i); }
 void AIRuntimeView::onSourceSelectionChanged() { 
     int r = ui->tableSources->currentRow();
@@ -481,6 +591,20 @@ void AIRuntimeView::onSourceSelectionChanged() {
         const auto &s = m_sources[r];
         ui->editSourceName->setText(s.name);
         ui->comboSourceType->setCurrentText(s.type);
+        
+        // Populate configuration widgets based on type and value
+        if (s.type == "USB Camera") {
+            int idx = 0;
+            if (s.value.startsWith("usb:")) idx = s.value.mid(4).toInt();
+            else if (s.value.contains("/video")) idx = s.value.mid(s.value.indexOf("video") + 5).toInt();
+            ui->spinUSBIndex->setValue(idx);
+        } else if (s.type == "RTSP Stream") {
+            ui->editRTSPUrl->setText(s.value);
+        } else if (s.type == "Video File") {
+            ui->editFilePath->setText(s.value);
+        }
+        
+        ui->groupSourceEdit->setEnabled(true);
     }
 }
 void AIRuntimeView::onSourceDataChanged() {}
@@ -498,171 +622,25 @@ void AIRuntimeView::updateAipuStatus() {
 }
 void AIRuntimeView::onNewProfile() { InferenceProfile p; p.name="New Profile"; m_profiles.append(p); ui->comboProfiles->addItem(p.name); ui->comboActiveProfile->addItem(p.name); ui->comboProfiles->setCurrentIndex(m_profiles.size()-1); }
 void AIRuntimeView::onDeleteProfile() { int i = ui->comboProfiles->currentIndex(); if (i>=0) { m_profiles.removeAt(i); ui->comboProfiles->removeItem(i); ui->comboActiveProfile->removeItem(i); }}
-void AIRuntimeView::onSaveEdgeXManual() { saveSettings(); }
-void AIRuntimeView::onValidateJSON()
-{
-    QString content = ui->textPayloadTemplate->toPlainText();
-    if (content.isEmpty()) {
-        QMessageBox::warning(this, "Validation", "Template is empty.");
-        return;
-    }
-
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(content.toUtf8(), &err);
-    if (doc.isNull()) {
-        QMessageBox::critical(this, "JSON Error", "Invalid JSON: " + err.errorString());
-        return;
-    }
-
-    // Extract resource names (n) from template
-    QStringList templateResources;
-    if (doc.isArray()) {
-        QJsonArray arr = doc.array();
-        for (int i=0; i<arr.size(); ++i) {
-            QString n = arr[i].toObject()["n"].toString();
-            if (!n.isEmpty()) templateResources << n;
-        }
-    } else if (doc.isObject()) {
-        QString n = doc.object()["n"].toString();
-        if (!n.isEmpty()) templateResources << n;
-    }
-
-    if (templateResources.isEmpty()) {
-        QMessageBox::warning(this, "Validation", "No resource names ('n' field) found in template.");
-        return;
-    }
-
-    // Check resources
-    QJsonArray devResources = selectedProfile["deviceResources"].toArray();
-    QStringList availableResources;
-    for (int i=0; i<devResources.size(); ++i) {
-        availableResources << devResources[i].toObject()["name"].toString();
-    }
-
-    QStringList missing;
-    for (const QString &res : templateResources) {
-        // Skip placeholders like <string>, <integer> if they appear in 'n'
-        if (res.startsWith("<") && res.endsWith(">")) continue;
-        if (!availableResources.contains(res)) missing << res;
-    }
-
-    if (missing.isEmpty()) {
-        QMessageBox::information(this, "Success", QString("Template is valid for profile '%1'.\nResources checked: %2").arg(profileName).arg(templateResources.join(", ")));
-    } else {
-        QMessageBox::critical(this, "Validation Failed", 
-            QString("The following resources in the template are NOT defined in profile '%1':\n\n%2")
-            .arg(profileName).arg(missing.join("\n")));
-    }
-}
-void AIRuntimeView::onBrowseTemplate()
-{
-    QString f = QFileDialog::getOpenFileName(this, "Open SenML Template", m_sdkPath, "JSON Files (*.json);;All Files (*)");
-    if (!f.isEmpty()) ui->editTemplatePath->setText(f);
-}
-
-void AIRuntimeView::onValidateFile()
-{
-    QString path = ui->editTemplatePath->text();
-    if (path.isEmpty()) {
-        QMessageBox::warning(this, "Validation", "Please select a template file first.");
-        return;
-    }
-
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::critical(this, "Error", "Could not open file: " + file.errorString());
-        return;
-    }
-
-    QString content = file.readAll();
-    file.close();
-
-    // Use shared validation logic (refactored or duplicated for brevity here)
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(content.toUtf8(), &err);
-    if (doc.isNull()) {
-        QMessageBox::critical(this, "JSON Error", "Invalid JSON in file: " + err.errorString());
-        return;
-    }
-
-    // Extract resource names (n)
-    QStringList templateResources;
-    QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
-    if (doc.isObject()) arr.append(doc.object());
-    
-    for (int i=0; i<arr.size(); ++i) {
-        QString n = arr[i].toObject()["n"].toString();
-        if (!n.isEmpty()) templateResources << n;
-    }
-
-    if (templateResources.isEmpty()) {
-        QMessageBox::warning(this, "Validation", "No resource names ('n') found in file.");
-        return;
-    }
-
-    // Check against selected profile
-    int activeIdx = ui->comboActiveProfile->currentIndex();
-    QString profileName;
-    if (activeIdx >= 0 && activeIdx < m_profiles.size()) {
-        profileName = m_profiles[activeIdx].edgexProfileName;
-    }
-
-    QJsonObject selectedProfile;
-    for (int i=0; i<m_discoveredProfiles.size(); ++i) {
-        if (m_discoveredProfiles[i].toObject()["name"].toString() == profileName) {
-            selectedProfile = m_discoveredProfiles[i].toObject();
-            break;
-        }
-    }
-
-    if (selectedProfile.isEmpty()) {
-        QMessageBox::warning(this, "Validation", "Selected profile not found.");
-        return;
-    }
-
-    QJsonArray devResources = selectedProfile["deviceResources"].toArray();
-    QStringList availableResources;
-    for (int i=0; i<devResources.size(); ++i) availableResources << devResources[i].toObject()["name"].toString();
-
-    QStringList missing;
-    for (const QString &res : templateResources) {
-        if (res.startsWith("<") && res.endsWith(">")) continue;
-        if (!availableResources.contains(res)) missing << res;
-    }
-
-    if (missing.isEmpty()) {
-        QMessageBox::information(this, "Success", "File template is valid for current profile.");
-    } else {
-        QMessageBox::critical(this, "Validation Failed", "Missing resources:\n" + missing.join("\n"));
-    }
-}
-
-void AIRuntimeView::onUploadEdgeXTemplate()
-{
-    QString path = ui->editTemplatePath->text();
-    if (path.isEmpty()) return;
-    QFile f(path);
-    if (f.open(QIODevice::ReadOnly)) {
-        ui->textPayloadTemplate->setPlainText(f.readAll());
-        f.close();
-        onValidateJSON();
-    } else {
-        QMessageBox::critical(this, "Error", "Failed to load template file.");
-    }
-}
-
 void AIRuntimeView::onEdgeXDeviceChanged(const QString &text)
 {
     QString name = text.trimmed();
     m_requestedDeviceName = name;
-
-    QSettings s;
-    s.setValue("edgex/last_device", name);
-    s.sync();
-
+    
     int profIdx = ui->comboProfiles->currentIndex();
     if (profIdx >= 0 && profIdx < m_profiles.size()) {
         m_profiles[profIdx].edgexDeviceName = name;
+    }
+}
+
+void AIRuntimeView::onEdgeXProfileChanged(const QString &text)
+{
+    QString name = text.trimmed();
+    m_requestedProfileName = name;
+    
+    int profIdx = ui->comboProfiles->currentIndex();
+    if (profIdx >= 0 && profIdx < m_profiles.size()) {
+        m_profiles[profIdx].edgexProfileName = name;
     }
 }
 

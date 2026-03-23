@@ -34,12 +34,7 @@ struct InferenceProfile {
     QString pipelineType;
     int frameLimit;
     QString displayMode;
-    QString windowSize;
     QString saveOutputPath;
-    bool hwCodec;
-    bool vaapi;
-    bool opencl;
-    bool opengl;
     QString aipuCores;
     bool showHostFps;
     bool showStreamTiming;
@@ -47,6 +42,7 @@ struct InferenceProfile {
     QString edgexDeviceName;
     QString edgexProfileName;
     QString edgexPayloadTemplate;
+    QString senmlBn;
     // Metadata Files
     QString classMapPath;
     QString embeddingPath;
@@ -97,12 +93,8 @@ private slots:
     void onProfileSelectionChanged(int index);
 
     // EdgeX Configuration
-    void onSaveEdgeXManual();
-    void onValidateJSON();
-    void onBrowseTemplate();
-    void onValidateFile();
-    void onUploadEdgeXTemplate();
     void onEdgeXDeviceChanged(const QString &text);
+    void onEdgeXProfileChanged(const QString &text);
 
 private:
     void setupLivePanel();
@@ -131,6 +123,7 @@ private:
     QJsonArray m_discoveredProfiles;
 
     QString m_requestedDeviceName;
+    QString m_requestedProfileName;
 };
 
 #endif // AIRUNTIMEVIEW_H
