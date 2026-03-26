@@ -68,6 +68,7 @@ try:
         # Global process bounds
         proc_start = core_offset
         proc_end   = proc_start + (core_limit if core_limit > 0 else 4) # Default to 4 cores if no limit
+        current_offset = proc_start
         
         configures = {}
         last = proc_start # Initialize 'last' to the process start for tracking max core used
@@ -80,12 +81,12 @@ try:
             # Use original cores as requested (just for logging)
             requested_cores = task.aipu_cores
             
-            # Constrain task to the process's allocated cores
-            if core_limit > 0:
-                task.aipu_cores = core_limit
-            
-            # ALL tasks in this process start at the SAME offset and stay within the SAME limit
-            task_offset = proc_start
+            # Constrain task to the process allocated cores
+            task_offset = current_offset
+            task.aipu_cores = min(requested_cores, proc_end - task_offset)
+            if task.aipu_cores < 1: task.aipu_cores = 1
+            # For multitask pipelines, we stack tasks while staying within proc_end
+            task_offset = current_offset
             task_end    = task_offset + task.aipu_cores
             
             patch_logger.info(f"Task '{getattr(task, 'name', 'unknown')}' "
@@ -102,6 +103,8 @@ try:
             # Track the maximum core used across all tasks for the final clock report
             if task_end > last:
                 last = task_end
+            # Update current_offset to stack the next task
+            current_offset = task_end
 
         if configures:
             conf_str = ', '.join(f"{k}={v}" for k, v in configures.items())
