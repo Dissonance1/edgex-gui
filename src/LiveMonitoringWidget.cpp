@@ -95,3 +95,8 @@ void LiveMonitoringWidget::paintEvent(QPaintEvent *event)
         painter.drawText(rect(), Qt::AlignCenter, "Waiting for Native Stream...");
     }
 }
+void LiveMonitoringWidget::setDetections(const QJsonArray &detections)
+{
+    m_detections = detections;
+    update();
+}

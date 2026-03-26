@@ -19,6 +19,7 @@ public:
 
     // Native frame injection from AIInferenceWorker thread
     void updateNativeFrame(int streamId, const QImage &frame, const QJsonArray &detections);
+    void setDetections(const QJsonArray &detections);
 
 protected:
     void paintEvent(QPaintEvent *event) override;

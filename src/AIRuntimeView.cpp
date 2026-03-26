@@ -15,14 +15,14 @@
 #include <QHeaderView>
 #include "ConfigManager.h"
 #include "LiveMonitoringWidget.h"
+#include "InferenceResourceManager.h"
 
 AIRuntimeView::AIRuntimeView(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::AIRuntimeView),
     m_netManager(new QNetworkAccessManager(this)),
     m_metadataClient(new MetadataClient(this)),
-    m_liveWidget(nullptr),
-    m_inferenceWorker(nullptr)
+    m_liveWidget(nullptr)
 {
     m_metadataClient->setBaseUrl(ConfigManager::instance().metadataUrl());
     ui->setupUi(this);
@@ -147,101 +147,99 @@ void AIRuntimeView::setupLivePanel()
 
 void AIRuntimeView::startInference()
 {
-    int profileIdx = ui->comboActiveProfile->currentIndex();
-    fprintf(stderr, "AIRuntimeView: Starting inference. Profile Index: %d\n", profileIdx);
-    
-    fflush(stderr);
-
-    // Camera Source — use the currently selected source from the UI dropdown
-    QString camName = ui->comboProfileCamera->currentText();
-    QString sourceValue = "usb:20"; // fallback
-    for (const auto &src : m_sources) {
-        if (src.name == camName) {
-            sourceValue = src.value;
-            break;
-        }
-    }
-
-    if (sourceValue == "usb:20" && !m_sources.isEmpty() && camName.isEmpty()) {
-        sourceValue = m_sources[0].value;
-    }
-    // Clean up old worker if present
-    stopInference();
-
-    // Build full config from profile UI
-    QJsonObject configJson;
-    configJson["modelPath"]           = ui->editModelPath->text();
-    configJson["confidenceThreshold"] = ui->spinConfidence->value() / 100.0;
-    // Send AIPU cores — backend accepts "0,1,2,3" or "4" (count)
-    configJson["aipuCores"]           = ui->editAipuCores->text();
-    configJson["cameraSource"]        = sourceValue;
-    
-    // Configurable SDK parameters
-    configJson["metisDevice"] = "m2"; // Hardcoded m2 device
-    if (profileIdx >= 0 && profileIdx < m_profiles.size()) {
-        const auto &p = m_profiles[profileIdx];
-        configJson["pipelineType"] = p.pipelineType.isEmpty() ? ui->comboPipelineType->currentText() : p.pipelineType;
-        configJson["displayMode"]  = p.displayMode.isEmpty()  ? ui->comboDisplayMode->currentText()  : p.displayMode;
-    } else {
-        configJson["pipelineType"] = ui->comboPipelineType->currentText();
-        configJson["displayMode"]  = ui->comboDisplayMode->currentText();
-    }
-
-    // Validate mandatory EdgeX fields
-    QString edgexDevice = ui->comboEdgeXDevice->currentText();
-    QString edgexProfile = ui->comboEdgeXProfile->currentText();
-    QString edgexBnValue = ui->editSenmlBn->text().trimmed();
-
-    if (sourceValue.isEmpty() || edgexDevice.isEmpty() || edgexProfile.isEmpty() || edgexBnValue.isEmpty()) {
-        QMessageBox::warning(this, "Error", "Camera Source, EdgeX Target Device/Profile, and SenML Base Name (bn) are all mandatory.");
+    QString profileName = ui->comboActiveProfile->currentText();
+    if (m_workers.contains(profileName)) {
+        m_activeProfile = profileName;
+        ui->btnLaunch->setEnabled(false);
+        ui->btnStop->setEnabled(true);
         return;
     }
 
-    // EdgeX Device Name (bn) is now stored in the inference profile
-    if (profileIdx >= 0 && profileIdx < m_profiles.size()) {
-        configJson["edgexDeviceName"]  = m_profiles[profileIdx].edgexDeviceName;
-        configJson["edgexProfileName"] = m_profiles[profileIdx].edgexProfileName;
-        configJson["edgexBn"]          = m_profiles[profileIdx].senmlBn;
-    } else {
-        configJson["edgexDeviceName"]  = "";
-        configJson["edgexProfileName"] = "";
-        configJson["edgexBn"]          = "";
+    // Allocate Resources
+    PortSet ports = InferenceResourceManager::instance().allocatePorts();
+    if (!ports.isValid()) {
+        QMessageBox::warning(this, "Error", "No available ports for new inference stream.");
+        return;
     }
 
-    configJson["classMapPath"]        = ui->editClassMapPath->text();
-    configJson["embeddingPath"]       = ui->editEmbeddingPath->text();
+    QString cores = ui->editAipuCores->text();
+    if (!InferenceResourceManager::instance().checkAndAllocateCores(cores)) {
+        InferenceResourceManager::instance().releasePorts(ports);
+        QMessageBox::warning(this, "Error", QString("AIPU Cores %1 are already in use or invalid.").arg(cores));
+        return;
+    }
 
-    m_inferenceWorker = new AIInferenceWorker(configJson, this);
-    
-    connect(m_inferenceWorker, &AIInferenceWorker::frameReady, this, &AIRuntimeView::onFrameReceived);
-    connect(m_inferenceWorker, &AIInferenceWorker::errorOccurred, this, &AIRuntimeView::onErrorOccurred);
-    connect(m_inferenceWorker, &AIInferenceWorker::logMessage, this, &AIRuntimeView::onWorkerLog);
-    
-    // UI Update
+    // Camera Source
+    QString camName = ui->comboProfileCamera->currentText();
+    QString sourceValue = "usb:20";
+    for (const auto &src : m_sources) {
+        if (src.name == camName) { sourceValue = src.value; break; }
+    }
+
+    // Build Config
+    QJsonObject configJson;
+    configJson["profileName"]         = profileName;
+    configJson["modelPath"]           = ui->editModelPath->text();
+    configJson["confidenceThreshold"] = ui->spinConfidence->value() / 100.0;
+    configJson["aipuCores"]           = cores;
+    configJson["cameraSource"]        = sourceValue;
+    configJson["videoPort"]           = ports.video;
+    configJson["metaPort"]            = ports.meta;
+    configJson["cmdPort"]             = ports.command;
+
+    // EdgeX Settings
+    int profileIdx = ui->comboActiveProfile->currentIndex();
+    if (profileIdx >= 0 && profileIdx < m_profiles.size()) {
+        const auto &p = m_profiles[profileIdx];
+        configJson["edgexDeviceName"]  = p.edgexDeviceName;
+        configJson["edgexProfileName"] = p.edgexProfileName;
+        configJson["edgexBn"]          = p.senmlBn;
+        configJson["pipelineType"]     = p.pipelineType.isEmpty() ? ui->comboPipelineType->currentText() : p.pipelineType;
+    }
+
+    configJson["classMapPath"]  = ui->editClassMapPath->text();
+    configJson["embeddingPath"] = ui->editEmbeddingPath->text();
+
+    // Create Worker
+    AIInferenceWorker* worker = new AIInferenceWorker(configJson, this);
+    m_workers[profileName] = worker;
+    m_activeProfile = profileName;
+
+    connect(worker, &AIInferenceWorker::frameReady, this, &AIRuntimeView::onFrameReceived);
+    connect(worker, &AIInferenceWorker::metadataReady, this, &AIRuntimeView::onMetadataReceived);
+    connect(worker, &AIInferenceWorker::statusChanged, this, &AIRuntimeView::onStatusChanged);
+    connect(worker, &AIInferenceWorker::errorOccurred, this, &AIRuntimeView::onErrorOccurred);
+    connect(worker, &AIInferenceWorker::logMessage, this, &AIRuntimeView::onWorkerLog);
+
+    worker->start();
+
     ui->btnLaunch->setEnabled(false);
     ui->btnStop->setEnabled(true);
-    ui->comboActiveProfile->setEnabled(false);
-
-    if (m_liveWidget) {
-        m_liveWidget->play("cam_1");
-    }
-
-    m_inferenceWorker->start();
+    if (m_liveWidget) m_liveWidget->play("inference");
 }
 
 void AIRuntimeView::stopInference()
 {
-    if (m_inferenceWorker) {
-        qDebug() << "AIRuntimeView: Stopping inference worker thread...";
-        m_inferenceWorker->stop();
-        m_inferenceWorker->deleteLater();
-        m_inferenceWorker = nullptr;
-    }
+    QString profileName = ui->comboActiveProfile->currentText();
+    if (!m_workers.contains(profileName)) return;
+
+    AIInferenceWorker* worker = m_workers.take(profileName);
     
-    if (m_liveWidget) m_liveWidget->stop();
+    // Release EXACT resources used by this worker
+    InferenceResourceManager::instance().releasePorts(worker->ports());
+    InferenceResourceManager::instance().releaseCores(worker->aipuCores());
+
+    worker->stop();
+
+    worker->deleteLater();
+    
+    if (m_activeProfile == profileName) {
+        m_activeProfile = "";
+        if (m_liveWidget) m_liveWidget->stop();
+    }
+
     ui->btnLaunch->setEnabled(true);
     ui->btnStop->setEnabled(false);
-    ui->comboActiveProfile->setEnabled(true);
 }
 
 void AIRuntimeView::onNavItemChanged(int index)
@@ -371,6 +369,17 @@ void AIRuntimeView::onProfileSelectionChanged(int index)
 {
     if (index < 0 || index >= m_profiles.size()) return;
     const auto &p = m_profiles[index];
+    
+    m_activeProfile = p.name;
+    bool running = m_workers.contains(m_activeProfile);
+    
+    ui->btnLaunch->setEnabled(!running);
+    ui->btnStop->setEnabled(running);
+    
+    if (running && m_liveWidget) {
+        m_liveWidget->play("inference");
+    }
+
     ui->editProfileName->setText(p.name);
     ui->editModelPath->setText(p.modelYamlPath);
     ui->comboProfileCamera->setCurrentText(p.cameraSourceName);
@@ -491,6 +500,11 @@ void AIRuntimeView::loadSettings()
     }
     s.endArray();
     
+    // ENSURE CLEAN STATE: Kill any orphaned backends from previous sessions
+    QProcess::execute("pkill", QStringList() << "-9" << "-f" << "axelera_server.py");
+    
+    fetchEdgeXMetaData();
+
     // Load global EdgeX defaults
     m_requestedDeviceName = s.value("edgex/last_device").toString();
 
@@ -559,14 +573,6 @@ void AIRuntimeView::fetchEdgeXMetaData()
 }
 
 // Minimal stubs for remaining slots
-void AIRuntimeView::onFrameReceived(int streamId, const QImage &frame, const QJsonArray &detections) 
-{
-    if (m_liveWidget) {
-        m_liveWidget->updateNativeFrame(streamId, frame, detections);
-    }
-}
-void AIRuntimeView::onWorkerLog(const QString &msg) { qDebug() << "[InferenceWorker]" << msg; }
-void AIRuntimeView::onErrorOccurred(const QString &e) { QMessageBox::critical(this, "Error", e); stopInference(); }
 void AIRuntimeView::addSource() { 
     m_sources.append({"New", "USB Camera", "usb:0"}); 
     updateSourcesUI(); 
@@ -575,16 +581,6 @@ void AIRuntimeView::addSource() {
     ui->groupSourceEdit->setEnabled(true);
 }
 void AIRuntimeView::editSource() { ui->groupSourceEdit->setEnabled(true); }
-void AIRuntimeView::deleteSource() { 
-    int r = ui->tableSources->currentRow(); 
-    if (r>=0) { 
-        m_sources.removeAt(r); 
-        updateSourcesUI(); 
-        saveSettings();
-    }
-}
-void AIRuntimeView::browseVideoFile() { QString f = QFileDialog::getOpenFileName(this, "Select Video File"); if (!f.isEmpty()) ui->editFilePath->setText(f); }
-void AIRuntimeView::onSourceTypeChanged(int i) { ui->stackSourceConfig->setCurrentIndex(i); }
 void AIRuntimeView::onSourceSelectionChanged() { 
     int r = ui->tableSources->currentRow();
     if (r>=0 && r<m_sources.size()) {
@@ -607,21 +603,75 @@ void AIRuntimeView::onSourceSelectionChanged() {
         ui->groupSourceEdit->setEnabled(true);
     }
 }
-void AIRuntimeView::onSourceDataChanged() {}
+void AIRuntimeView::onFrameReceived(const QImage& frame)
+{
+    AIInferenceWorker* worker = qobject_cast<AIInferenceWorker*>(sender());
+    if (!worker) return;
+
+    QString profile = worker->profileName();
+    if (profile == m_activeProfile) {
+        if (m_liveWidget) {
+            m_liveWidget->updateNativeFrame(0, frame, m_latestDetectionsMap[profile]);
+        }
+    }
+}
+
+void AIRuntimeView::onMetadataReceived(const QJsonObject& meta)
+{
+    AIInferenceWorker* worker = qobject_cast<AIInferenceWorker*>(sender());
+    if (!worker) return;
+
+    QString profile = worker->profileName();
+    QJsonArray detections = meta["detections"].toArray();
+    m_latestDetectionsMap[profile] = detections;
+
+    if (profile == m_activeProfile) {
+        // Option to display metadata text if needed
+    }
+}
+
+void AIRuntimeView::onStatusChanged(const QString &status)
+{
+    AIInferenceWorker* worker = qobject_cast<AIInferenceWorker*>(sender());
+    if (worker && worker->profileName() == m_activeProfile) {
+        ui->lblAipuStatus->setText(QString("Status: %1").arg(status));
+    }
+}
+
+void AIRuntimeView::onWorkerLog(const QString &msg) { qDebug() << "[InferenceWorker]" << msg; }
+void AIRuntimeView::onErrorOccurred(const QString &e) { QMessageBox::critical(this, "Error", e); }
+
+void AIRuntimeView::onNewProfile() { 
+    InferenceProfile p; 
+    p.name = "New Profile " + QString::number(m_profiles.size() + 1); 
+    m_profiles.append(p); 
+    ui->comboProfiles->addItem(p.name); 
+    ui->comboActiveProfile->addItem(p.name); 
+    ui->comboProfiles->setCurrentIndex(m_profiles.size()-1); 
+}
+
+void AIRuntimeView::onDeleteProfile() { 
+    int i = ui->comboProfiles->currentIndex(); 
+    if (i>=0 && i < m_profiles.size()) { 
+        m_profiles.removeAt(i); 
+        ui->comboProfiles->removeItem(i); 
+        ui->comboActiveProfile->removeItem(i); 
+    }
+}
 void AIRuntimeView::onBrowseOutput() { QString d = QFileDialog::getExistingDirectory(this); if (!d.isEmpty()) ui->editSaveOutputPath->setText(d); }
 void AIRuntimeView::onBrowseClassMap() { QFileDialog diag(this, "Select Class Map", m_sdkPath); diag.setOption(QFileDialog::DontUseNativeDialog); diag.setLabelText(QFileDialog::Accept, "Select"); if (diag.exec()) ui->editClassMapPath->setText(diag.selectedFiles().first()); }
 void AIRuntimeView::onBrowseEmbedding() { QFileDialog diag(this, "Select Embedding", m_sdkPath); diag.setOption(QFileDialog::DontUseNativeDialog); diag.setLabelText(QFileDialog::Accept, "Select"); if (diag.exec()) ui->editEmbeddingPath->setText(diag.selectedFiles().first()); }
-void AIRuntimeView::updateAipuStatus() { 
-    // In a real scenario, we would parse this from backend metadata or run axdevice
-    // For now, we show a status indicating the hardware is ready or active
-    if (ui->btnStop->isEnabled()) {
-        ui->lblAipuStatus->setText("<font color='green'>AIPU: Active (4 Cores)</font>");
-    } else {
-        ui->lblAipuStatus->setText("<font color='gray'>AIPU: Standby</font>");
+void AIRuntimeView::updateAipuStatus() {}
+void AIRuntimeView::onSourceDataChanged() {}
+void AIRuntimeView::browseVideoFile() { QString f = QFileDialog::getOpenFileName(this, "Select Video File"); if (!f.isEmpty()) ui->editFilePath->setText(f); }  
+void AIRuntimeView::onSourceTypeChanged(int index) { ui->stackSourceConfig->setCurrentIndex(index); }
+void AIRuntimeView::deleteSource() {
+    int r = ui->tableSources->currentRow();
+    if (r>=0 && r<m_sources.size()) {
+        m_sources.removeAt(r);
+        updateSourcesUI();
     }
 }
-void AIRuntimeView::onNewProfile() { InferenceProfile p; p.name="New Profile"; m_profiles.append(p); ui->comboProfiles->addItem(p.name); ui->comboActiveProfile->addItem(p.name); ui->comboProfiles->setCurrentIndex(m_profiles.size()-1); }
-void AIRuntimeView::onDeleteProfile() { int i = ui->comboProfiles->currentIndex(); if (i>=0) { m_profiles.removeAt(i); ui->comboProfiles->removeItem(i); ui->comboActiveProfile->removeItem(i); }}
 void AIRuntimeView::onEdgeXDeviceChanged(const QString &text)
 {
     QString name = text.trimmed();

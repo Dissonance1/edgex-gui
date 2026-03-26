@@ -13,31 +13,119 @@ from pathlib import Path
 
 # --- Constants & Globals ---
 DEFAULT_CONFIG = "config_multi_camera.json"
-TELEMETRY_PORT = 5566
-COMMAND_PORT   = 5567
-VIDEO_PORT     = 5568
+PORT_VIDEO     = 5568
+PORT_METADATA  = 5566
+PORT_COMMAND   = 5567
+_SKIP_FRAMES   = 1 # 1=none, 2=half, etc.
 
-_running            = True
-_latest_jpeg        = None
-_latest_jpeg_lock   = threading.Lock()
-_gui_clients        = []
-_gui_clients_lock   = threading.Lock()
-_stream             = None          # The actual SDK stream object
-_stream_lock        = threading.Lock()
-_stop_event         = threading.Event()   # Signals the inference loop to stop
-_inference_done     = threading.Event()   # Set when thread fully exits
+_stream        = None
+_stop_event    = threading.Event()
+_inference_done = threading.Event()
+_latest_jpeg   = None
+_running       = True
+_gui_clients    = []
+_gui_clients_lock = threading.Lock()
+
+_latest_jpeg_lock = threading.Lock()
 
 # Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - [%(levelname)s] - %(message)s'
-)
-logger = logging.getLogger("MASTER")
+def setup_logging(log_file=None):
+    handlers = [logging.StreamHandler(sys.stdout)]
+    if log_file:
+        log_dir = os.path.dirname(log_file)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+        handlers.append(logging.FileHandler(log_file))
+    
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - [%(levelname)s] - %(message)s',
+        handlers=handlers
+    )
+    return logging.getLogger("MASTER")
+
+logger = None # Will be initialized in main
 
 # SDK Root
 _sdk_root = os.environ.get("AXELERA_FRAMEWORK", "/data/voyager-sdk")
 if _sdk_root not in sys.path:
     sys.path.append(_sdk_root)
+
+# --- SDK Monkey Patch for Multi-Process Core Partitioning ---
+# The SDK's DeviceManager hardcodes core_index to 0 for each process.
+# We patch it to use AXELERA_CORE_OFFSET as the starting core.
+try:
+    import axelera.app.device_manager as device_manager
+    import time
+    
+    _original_configure_boards = device_manager._AipuDeviceManager._configure_boards
+
+    def _patched_configure_boards(self, nn):
+        # Read the global core offset and limit for this process
+        core_offset = int(os.environ.get("AXELERA_CORE_OFFSET", "0"))
+        core_limit  = int(os.environ.get("AXELERA_CORE_LIMIT", "0"))
+
+        # Global process bounds
+        proc_start = core_offset
+        proc_end   = proc_start + (core_limit if core_limit > 0 else 4) # Default to 4 cores if no limit
+        
+        configures = {}
+        last = proc_start # Initialize 'last' to the process start for tracking max core used
+        patch_logger = logging.getLogger("SDK-PATCH")
+        
+        for task in nn.tasks:
+            if not getattr(task, 'is_dl_task', True):
+                continue
+            
+            # Use original cores as requested (just for logging)
+            requested_cores = task.aipu_cores
+            
+            # Constrain task to the process's allocated cores
+            if core_limit > 0:
+                task.aipu_cores = core_limit
+            
+            # ALL tasks in this process start at the SAME offset and stay within the SAME limit
+            task_offset = proc_start
+            task_end    = task_offset + task.aipu_cores
+            
+            patch_logger.info(f"Task '{getattr(task, 'name', 'unknown')}' "
+                              f"(Model Req: {requested_cores}, Process Limit: {task.aipu_cores}) "
+                              f"at Hardware Offset: {task_offset}")
+            
+            # Use SDK's internal logic to get clock and mvm
+            clock = nn.model_infos.clock_profile(task.model_info.name, self.metis)
+            mvm = nn.model_infos.mvm_limitation(task.model_info.name, self.metis)
+
+            # Call original _get_configures with fixed process bounds
+            configures.update(device_manager._get_configures(task_offset, task_end, clock, mvm))
+            
+            # Track the maximum core used across all tasks for the final clock report
+            if task_end > last:
+                last = task_end
+
+        if configures:
+            conf_str = ', '.join(f"{k}={v}" for k, v in configures.items())
+            patch_logger.info(f"--- CORE PARTITIONING ACTIVE ---")
+            patch_logger.info(f"Process Base Offset: {proc_start}")
+            patch_logger.info(f"Allocated Core Range: {list(range(proc_start, last))}")
+            patch_logger.info(f"Board Configuration: {conf_str}")
+            
+            # Run the actual configuration on the device
+            ready = [self.context.configure_device(d, **configures) for d in self.devices]
+            if not all(ready):
+                patch_logger.info("Waiting for AIPU cores to initialize...")
+                while not all(self.context.device_ready(d) for d in self.devices):
+                    time.sleep(0.3)
+                patch_logger.info("AIPU cores READY.")
+                    
+        # Return the clock freqs for tracers (expects {core_id: freq})
+        return device_manager._get_core_clocks(self.context, self.devices[0], proc_start, last)
+
+    # Apply the patch
+    device_manager._AipuDeviceManager._configure_boards = _patched_configure_boards
+    logging.getLogger("SDK-PATCH").info("Successfully applied core offset monkey-patch to Axelera SDK")
+except Exception as e:
+    logging.getLogger("SDK-PATCH").error(f"CRITICAL: Failed to patch SDK: {e}")
 
 
 # ==============================================================================
@@ -421,9 +509,64 @@ def send_edgex_payload(device_name, profile_name, inference_output=None, templat
 # INFERENCE ENGINE
 # ==============================================================================
 
-def _run_inference(cfg):
-    global _stream, _latest_jpeg, _running
+def _get_inference_configs(cfg, base_args):
+    """Safely build Axelera SDK config objects without using from_parsed_args to avoid sys.exit triggers."""
+    from axelera.app import config as ax_config
+    
+    # GUI config mapping (Robust against key casing)
+    model_path = str(cfg.get("modelPath", cfg.get("model_path", getattr(base_args, "network", "")))).strip()
+    cam_source = str(cfg.get("cameraSource", cfg.get("camera_source", getattr(base_args, "sources", ["usb:0"])[0]))).strip()
+    aipu_cores = str(cfg.get("aipuCores", cfg.get("aipu_cores", getattr(base_args, "devices", "0")))).strip()
+    pipe_type  = str(cfg.get("pipelineType", cfg.get("pipeline_type", getattr(base_args, "pipe", "gst")))).strip()
+
+    # 1. SystemConfig
+    sc = ax_config.SystemConfig(
+        data_root=Path(base_args.data_root) if hasattr(base_args, "data_root") and base_args.data_root else None,
+        build_root=Path(base_args.build_root) if hasattr(base_args, "build_root") and base_args.build_root else None,
+        hardware_caps=ax_config.HardwareCaps.DEFAULT,
+        allow_hardware_codec=getattr(base_args, 'enable_hardware_codec', False)
+    )
+
+    # 2. InferenceStreamConfig
+    stc = ax_config.InferenceStreamConfig(
+        timeout=int(getattr(base_args, 'timeout', 5)),
+        frames=int(getattr(base_args, 'frames', 0))
+    )
+
+    # CORE PARTITIONING LOGIC:
+    # We use AXELERA_CORE_OFFSET environment variable to pin the process to a core.
+    # The device_selector identifies the Metis chip (always "0").
+    device_id = "0"
+    core_offset = os.environ.get("AXELERA_CORE_OFFSET", "0")
+    
+    # Calculate core COUNT from the string (e.g., "0,1" -> 2 cores, "2" -> 1 core)
+    core_list = [c.strip() for c in aipu_cores.split(",") if c.strip()]
+    core_count = len(core_list) if core_list else 1
+    
+    logger.info(f"Process partitioning: Metis Device {device_id}, Core Offset {core_offset}, Core Count {core_count}")
+
+    # 3. PipelineConfig
+    # Manual configuration mapping to bypass SDK argparse limitations 
+    pc = ax_config.PipelineConfig(
+        network=model_path,
+        sources=[ax_config.Source(cam_source)],
+        pipe_type=pipe_type,
+        device_selector=device_id, # Always use chip index 0
+        aipu_cores=core_count,     # Use actual core count requested
+        rtsp_latency=int(getattr(base_args, 'rtsp_latency', 500)),
+        low_latency=bool(getattr(base_args, 'low_latency', False)),
+        save_output=str(getattr(base_args, 'save_output', ""))
+    )
+
+    lc = ax_config.LoggingConfig()
+    dc = ax_config.DeployConfig()
+
+    return sc, stc, pc, lc, dc
+
+def _run_inference(cfg, args):
+    global _stream, _latest_jpeg, _running, _inference_done, _stop_event, _SKIP_FRAMES
     log = logging.getLogger("Inference")
+    _inference_done.clear()
 
     try:
         from axelera.app import config as ax_config, yaml_parser
@@ -435,7 +578,12 @@ def _run_inference(cfg):
         return
 
     # - Parse model name / path -----------------------
-    model = str(cfg.get("modelPath", "yolov8n-coco-onnx")).strip()
+    model = str(cfg.get("modelPath", "")).strip()
+
+    if not model:
+        log.error("CRITICAL: No modelPath provided in configuration! Aborting launch to prevent on-the-fly compilation.")
+        _inference_done.set()
+        return
 
     if not os.path.isabs(model) and not os.path.exists(model):
         search_dirs = [
@@ -548,76 +696,29 @@ def _run_inference(cfg):
     edgex_profile  = cfg.get("edgexProfileName", "")
     senml_template = cfg.get("edgexPayloadTemplate", None)
 
-    log.info(
-        f"START: model={model} source={src} cores={cores} "
-        f"conf={conf} edgex={edgex_device}/{edgex_profile}"
-    )
-
-    # - Build SDK args ----------------------------
-    original_argv = sys.argv[:]
-    sys.argv      = [sys.argv[0]]
-    parser        = ax_config.create_inference_argparser(yaml_parser.get_network_yaml_info())
-
-    pipe    = str(cfg.get("pipelineType", "gst")).strip().lower()
-    metis   = "m2"  # Hardcoded as requested
-    display_raw = str(cfg.get("displayMode", "none")).strip().lower()
-
-    display = "none"
-    if "window" in display_raw:
-        display = "window"
-    elif "headless" in display_raw:
-        display = "none"
-    else:
-        display = display_raw
-
-    args_list = [
-        model, src,
-        "--display", display,
-        "--pipe", pipe,
-        "--metis", metis,
-        "--aipu-cores", str(cores)
-    ]
-    log.info(f"SDK Args: {args_list}")
-    try:
-        args = parser.parse_args(args_list)
-    except SystemExit:
-        log.error("SDK Parser help:")
-        parser.print_help()
-        raise
-    sys.argv = original_argv
-
-    args.data_root  = Path(_sdk_root) / "ax_models"
-    args.build_root = Path(_sdk_root) / "build"
+    log.info(f"START: model={model} source={src}")
 
     is_file = not src.startswith("usb:") and not src.startswith("rtsp:") and os.path.exists(src)
 
     while not _stop_event.is_set():
-        sdk_stream = None
+        _stream = None
         try:
-            sc  = ax_config.SystemConfig.from_parsed_args(args)
-            stc = ax_config.InferenceStreamConfig.from_parsed_args(args)
-            pc  = ax_config.PipelineConfig.from_parsed_args(args)
-
-            if edgex_profile:
-                with _profile_lock:
-                    _profile_cache = {}
-                async_fetch_profile(edgex_profile)
-
-            lc  = ax_config.LoggingConfig.from_parsed_args(args)
-            dc  = ax_config.DeployConfig.from_parsed_args(args)
-
-            sdk_stream = create_inference_stream(sc, stc, pc, lc, dc)
-            with _stream_lock:
-                if _stop_event.is_set():
-                    sdk_stream.stop()
-                    break
-                _stream = sdk_stream
+            # - Build SDK configs safely -------------------
+            sc, stc, pc, lc, dc = _get_inference_configs(cfg, args)
+            pc.network = model
+            _stream = create_inference_stream(sc, stc, pc, lc, dc)
+            
             log.info("Stream online.")
 
             # - Per-frame loop --------------------------
-            for res in sdk_stream:
+            frame_idx = 0
+            for res in _stream:
                 if _stop_event.is_set():
                     break
+                
+                frame_idx += 1
+                if frame_idx % _SKIP_FRAMES != 0:
+                    continue
 
                 # - Encode JPEG frame ----------------------
                 try:
@@ -768,20 +869,19 @@ def _run_inference(cfg):
             if not is_file or _stop_event.is_set():
                 break
             log.info("Looping video file...")
-            sdk_stream.stop()
+            _stream.stop()
 
         except Exception as e:
             log.error(f"Inference error: {e}")
             break
         finally:
-            if sdk_stream is not None:
+            if _stream is not None:
                 try:
                     log.info("Closing SDK stream...")
-                    sdk_stream.stop()
+                    _stream.stop()
                 except Exception:
                     pass
-            with _stream_lock:
-                _stream = None
+            _stream = None
 
     _inference_done.set()
     log.info("Inference thread done.")
@@ -791,8 +891,9 @@ def _run_inference(cfg):
 # COMMAND SERVER
 # ==============================================================================
 
-def run_command_server(port, fallback):
-    global _running, _stream
+
+def run_command_server(port, fallback_cfg, args):
+    global _running, _stream, _stop_event, _inference_done
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(("0.0.0.0", port))
@@ -803,7 +904,17 @@ def run_command_server(port, fallback):
     while _running:
         try:
             conn, addr = srv.accept()
-            raw = conn.recv(10240).decode("utf-8").strip()
+            # Read until newline
+            buffer = b""
+            while True:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                buffer += chunk
+                if b"\n" in chunk:
+                    break
+            
+            raw = buffer.decode("utf-8").strip()
             if not raw:
                 conn.close()
                 continue
@@ -812,49 +923,37 @@ def run_command_server(port, fallback):
             body = raw.split(":", 1)[1] if ":" in raw else ""
 
             if cmd == "start":
-                try:
-                    cfg = json.loads(body) if body else fallback
-                except Exception:
-                    cfg = fallback
-
-                with _stream_lock:
-                    existing_stream = _stream
-
-                if existing_stream is not None:
-                    logger.info("Stopping existing inference before switching model...")
-                    _stop_event.set()
+                if _stream is not None:
+                    conn.sendall(b"ALREADY_RUNNING\n")
+                else:
                     try:
-                        existing_stream.stop()
-                    except Exception:
-                        pass
-                    _inference_done.wait(timeout=10.0)
-                    logger.info("Old stream released. Starting new model...")
-                    time.sleep(1.0)
-
-                _stop_event.clear()
-                _inference_done.clear()
-                threading.Thread(
-                    target=_run_inference, args=(cfg,), daemon=True
-                ).start()
-                conn.sendall(b"OK\n")
+                        cfg = json.loads(body) if body else fallback_cfg
+                        logger.info(f"RECEIVED CONFIG: {json.dumps(cfg)}")
+                    except Exception as e:
+                        logger.error(f"Config parse error: {e}")
+                        cfg = fallback_cfg
+                    _stop_event.clear()
+                    threading.Thread(target=_run_inference, args=(cfg, args), daemon=True).start()
+                    conn.sendall(b"OK\n")
 
             elif cmd == "stop":
-                with _stream_lock:
-                    existing = _stream
-                if existing is not None:
-                    logger.info("Stop requested - releasing AIPU cores...")
-                    _stop_event.set()
-                    with _profile_lock:
-                        _profile_cache = {}
-                    try:
-                        existing.stop()
-                    except Exception:
-                        pass
-                    with _stream_lock:
-                        _stream = None
-                    conn.sendall(b"STOPPING\n")
-                else:
-                    conn.sendall(b"IDLE\n")
+                _stop_event.set()
+                if _stream:
+                    try: _stream.stop()
+                    except Exception: pass
+                _inference_done.wait(timeout=5.0)
+                conn.sendall(b"STOPPED\n")
+
+            elif cmd == "status":
+                info = {
+                    "running": _stream is not None,
+                    "ports": {
+                        "video": PORT_VIDEO,
+                        "meta": PORT_METADATA,
+                        "cmd": PORT_COMMAND
+                    }
+                }
+                conn.sendall((json.dumps(info) + "\n").encode())
 
             conn.close()
         except socket.timeout:
@@ -869,7 +968,26 @@ def run_command_server(port, fallback):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default=DEFAULT_CONFIG)
+    parser.add_argument("--config",     default=DEFAULT_CONFIG)
+    parser.add_argument("--cmd-port",   type=int, default=5567)
+    parser.add_argument("--video-port", type=int, default=5568)
+    parser.add_argument("--meta-port",  type=int, default=5566)
+    parser.add_argument("--skip-frames", type=int, default=1)
+    parser.add_argument("--log-file",    type=str, default=None)
+    
+    # Capture SDK args for from_parsed_args fallback if needed
+    known_args, sdk_args_raw = parser.parse_known_args()
+    
+    # Initialize logger
+    logger = setup_logging(known_args.log_file)
+    
+    # Initialize globals with CLI args
+    PORT_COMMAND  = known_args.cmd_port
+    PORT_VIDEO    = known_args.video_port
+    PORT_METADATA = known_args.meta_port
+    _SKIP_FRAMES  = known_args.skip_frames
+
+    # Re-parse to get the full args namespace that SDK helpers expect
     args = parser.parse_args()
 
     try:
@@ -878,16 +996,17 @@ if __name__ == "__main__":
     except Exception:
         cfg = {}
 
-    threading.Thread(target=run_video_server,     args=(VIDEO_PORT,),        daemon=True).start()
-    threading.Thread(target=run_telemetry_server,  args=(TELEMETRY_PORT,),   daemon=True).start()
-    threading.Thread(target=run_command_server,    args=(COMMAND_PORT, cfg), daemon=True).start()
+    threading.Thread(target=run_video_server,     args=(PORT_VIDEO,),        daemon=True).start()
+    threading.Thread(target=run_telemetry_server,  args=(PORT_METADATA,),     daemon=True).start()
+    threading.Thread(target=run_command_server,    args=(PORT_COMMAND, cfg, args), daemon=True).start()
 
-    logger.info("Axelera Server Online.")
+    logger.info(f"Axelera Server Online. Ports: CMD={PORT_COMMAND}, VIDEO={PORT_VIDEO}, META={PORT_METADATA}")
     try:
-        while True:
+        while _running:
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         _stop_event.set()
+        if _stream: _stream.stop()
         _running = False
         time.sleep(1)

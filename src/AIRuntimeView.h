@@ -64,7 +64,9 @@ private slots:
     void stopInference();
     
     // Backend Signals
-    void onFrameReceived(int streamId, const QImage &frame, const QJsonArray &detections);
+    void onFrameReceived(const QImage &frame);
+    void onMetadataReceived(const QJsonObject &meta);
+    void onStatusChanged(const QString &status);
     void onErrorOccurred(const QString &error);
     void onWorkerLog(const QString &msg);
 
@@ -110,7 +112,8 @@ private:
     Ui::AIRuntimeView *ui;
     QNetworkAccessManager *m_netManager;
     LiveMonitoringWidget *m_liveWidget;
-    AIInferenceWorker *m_inferenceWorker;
+    QMap<QString, AIInferenceWorker*> m_workers;
+    QString m_activeProfile;
     
     QList<CameraSourceInfo> m_sources;
     QList<InferenceProfile> m_profiles;
@@ -121,6 +124,7 @@ private:
     MetadataClient *m_metadataClient;
     QJsonArray m_discoveredDevices;
     QJsonArray m_discoveredProfiles;
+    QMap<QString, QJsonArray> m_latestDetectionsMap;
 
     QString m_requestedDeviceName;
     QString m_requestedProfileName;
