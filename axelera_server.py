@@ -917,10 +917,14 @@ def run_command_server(port, fallback_cfg, args):
                 if b"\n" in chunk:
                     break
             
-            raw = buffer.decode("utf-8").strip()
-            if not raw:
+            # Decode and take only the first complete line
+            decoded = buffer.decode("utf-8")
+            lines = [l.strip() for l in decoded.split("\n") if l.strip()]
+            if not lines:
                 conn.close()
                 continue
+                
+            raw = lines[0]
 
             cmd  = raw.split(":", 1)[0]
             body = raw.split(":", 1)[1] if ":" in raw else ""
@@ -934,7 +938,9 @@ def run_command_server(port, fallback_cfg, args):
                         logger.info(f"RECEIVED CONFIG: {json.dumps(cfg)}")
                     except Exception as e:
                         logger.error(f"Config parse error: {e}")
-                        cfg = fallback_cfg
+                        conn.sendall(b"ERROR:PARSE_FAILED\n")
+                        conn.close()
+                        continue
                     _stop_event.clear()
                     threading.Thread(target=_run_inference, args=(cfg, args), daemon=True).start()
                     conn.sendall(b"OK\n")

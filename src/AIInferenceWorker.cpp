@@ -77,6 +77,10 @@ void AIInferenceWorker::start()
     // Axelera SDK Environment for Aetina (1.5.2-1)
     env.insert("AXELERA_FRAMEWORK", "/data/voyager-sdk");
     env.insert("AXELERA_RUNTIME_DIR", "/opt/axelera/runtime-1.5.2-1");
+    // Force SDK to look in the global build directory for pre-compiled binaries (.axnet)
+    env.insert("AXELERA_BUILD_DIR", "/data/voyager-sdk/build");
+    // Ensure cache is in a persistent location with enough space
+    env.insert("AXELERA_CACHE_DIR", "/data/.axelera_cache");
     env.insert("LD_LIBRARY_PATH", "/opt/axelera/runtime-1.5.2-1/lib:/data/voyager-sdk/operators/lib");
     env.insert("PYTHONPATH", "/data/voyager-sdk:/opt/axelera/runtime-1.5.2-1/tvm/tvm-src");
     env.insert("PKG_CONFIG_PATH", "/opt/axelera/runtime-1.5.2-1/lib/pkgconfig:/data/voyager-sdk/operators/lib/pkgconfig");
