@@ -8,24 +8,34 @@
 EDGEX_DIR="/data/edgex"
 GUI_DIR="/data/edgex-gui"
 
+function cleanup() {
+    echo ""
+    echo ">>> Caught signal, stopping all services..."
+    sudo pkill -9 -f axelera_server || true
+    sudo pkill -9 -f edgex-qt-ui    || true
+    sudo pkill -9 -f core-metadata  || true
+    sudo pkill -9 -f core-data      || true
+    sudo pkill -9 -f core-command   || true
+    sudo pkill -9 -f support-notifications || true
+    sudo pkill -9 -f support-scheduler    || true
+    sudo pkill -9 -f app-new-service      || true
+    sudo pkill -9 -f device-rest          || true
+    sudo pkill -9 -f kuiperd              || true
+    sudo pkill -9 -f consul               || true
+    sudo pkill -9 -f redis-server         || true
+    echo ">>> All services stopped."
+    exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
 echo "================================================"
 echo "  Aetina System Clean Restart"
 echo "================================================"
 
 # --- Step 0: Kill everything by name ---
 echo "[1/3] Killing existing processes..."
-sudo pkill -9 -f axelera_server || true
-sudo pkill -9 -f edgex-qt-ui    || true
-sudo pkill -9 -f core-metadata  || true
-sudo pkill -9 -f core-data      || true
-sudo pkill -9 -f core-command   || true
-sudo pkill -9 -f support-notifications || true
-sudo pkill -9 -f support-scheduler    || true
-sudo pkill -9 -f app-new-service      || true
-sudo pkill -9 -f device-rest          || true
-sudo pkill -9 -f kuiperd              || true
-sudo pkill -9 -f consul               || true
-sudo pkill -9 -f redis-server         || true
+cleanup
 
 # Wait for all ports to be released (TIME_WAIT etc.)
 echo "    Waiting for ports to release..."
@@ -77,3 +87,8 @@ echo "  1. Restart the GUI."
 echo "  2. Click 'Launch' to start inference."
 echo "  Logs: tail -f /tmp/axelera_server.log"
 echo "================================================"
+echo ""
+echo "Press Ctrl+C to stop all services and exit."
+echo "Showing logs for /tmp/axelera_server.log..."
+tail -f /tmp/axelera_server.log &
+wait $!

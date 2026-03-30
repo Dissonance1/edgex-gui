@@ -112,6 +112,7 @@ private:
     Ui::AIRuntimeView *ui;
     QNetworkAccessManager *m_netManager;
     LiveMonitoringWidget *m_liveWidget;
+    bool m_videoStreamEnabled;
     QMap<QString, AIInferenceWorker*> m_workers;
     QString m_activeProfile;
     

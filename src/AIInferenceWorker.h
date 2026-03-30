@@ -20,6 +20,8 @@ public:
 
     void start();
     void stop();
+    void setVideoStreamEnabled(bool enabled);
+    void setInitialVideoStreamEnabled(bool enabled) { m_videoStreamEnabled = enabled; }
     
     QString profileName() const;
     bool isRunning() const;
@@ -63,6 +65,7 @@ private:
     PortSet m_ports;
     QString m_aipuCores;
     int m_connectRetryCount = 0;
+    bool m_videoStreamEnabled = true;
 };
 
 #endif // AIINFERENCEWORKER_H

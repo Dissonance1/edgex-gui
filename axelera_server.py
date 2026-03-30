@@ -9,6 +9,7 @@ import logging
 import argparse
 import datetime
 import requests
+import yaml
 from pathlib import Path
 
 # --- Constants & Globals ---
@@ -23,6 +24,7 @@ _stop_event    = threading.Event()
 _inference_done = threading.Event()
 _latest_jpeg   = None
 _running       = True
+_video_enabled = True # Runtime toggle for JPEG encoding
 _gui_clients    = []
 _gui_clients_lock = threading.Lock()
 
@@ -668,9 +670,9 @@ def _run_inference(cfg, args):
             import yaml
             if os.path.exists(model):
                 with open(model, 'r') as f:
-                    mdata = yaml.safe_load(f)
-                if mdata and "datasets" in mdata:
-                    for dname, dinfo in mdata["datasets"].items():
+                    ydata = yaml.safe_load(f)
+                if ydata and "datasets" in ydata:
+                    for dname, dinfo in ydata["datasets"].items():
                         names_found = None
                         if "names" in dinfo:
                             names_found = dinfo["names"]
@@ -681,8 +683,8 @@ def _run_inference(cfg, args):
                             dyaml = os.path.join(ddir, dinfo["ultralytics_data_yaml"])
                             if os.path.exists(dyaml):
                                 with open(dyaml, 'r') as fy:
-                                    ydata = yaml.safe_load(fy)
-                                names_found = ydata.get("names")
+                                    ydata_inner = yaml.safe_load(fy)
+                                names_found = ydata_inner.get("names")
                         
                         if names_found:
                             if isinstance(names_found, list):
@@ -707,6 +709,45 @@ def _run_inference(cfg, args):
         _stream = None
         try:
             # - Build SDK configs safely -------------------
+            model = cfg.get("modelPath", "")
+            if model.endswith(".yaml") and os.path.exists(model):
+                # YAML-AWARE RESOLVER: We parse the YAML to see exactly what weights it needs.
+                # If weights are relative and missing, we link them from the global cache.
+                try:
+                    m_dir = os.path.dirname(model)
+                    with open(model, 'r') as f:
+                        ydata = yaml.safe_load(f)
+                    
+                    models_info = ydata.get("models", {})
+                    for m_name, m_cfg in models_info.items():
+                        w_path = m_cfg.get("weight_path")
+                        if w_path and not os.path.isabs(w_path):
+                            # Target location the SDK expects
+                            target = os.path.abspath(os.path.join(m_dir, w_path))
+                            if not os.path.exists(target):
+                                # Search in global /data cache
+                                fname = os.path.basename(w_path)
+                                # Possible cache locations
+                                cache_opts = [
+                                    f"/data/os_data_move/home/aetina/.cache/axelera/weights/{m_name}/{fname}",
+                                    f"/data/voyager-sdk/weights/{fname}"
+                                ]
+                                for opt in cache_opts:
+                                    if os.path.exists(opt):
+                                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                                        os.symlink(opt, target)
+                                        log.info(f"Resolved weight: {fname} -> {opt}")
+                                        break
+
+                    # Also ensure 'build' link exists for binaries
+                    b_link = os.path.join(m_dir, "build")
+                    if not os.path.exists(b_link):
+                        os.symlink("/data/voyager-sdk/build", b_link)
+                        log.info(f"Auto-linked build cache to {m_dir}")
+
+                except Exception as e:
+                    log.warning(f"YAML Resolver failed: {e}")
+
             sc, stc, pc, lc, dc = _get_inference_configs(cfg, args)
             pc.network = model
             _stream = create_inference_stream(sc, stc, pc, lc, dc)
@@ -725,23 +766,34 @@ def _run_inference(cfg, args):
 
                 # - Encode JPEG frame ----------------------
                 try:
-                    img      = res.image.asarray("BGR")
-                    ret, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 50])
-                    if ret:
+                    if _video_enabled:
+                        img      = res.image.asarray("BGR")
+                        ret, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                        if ret:
+                            with _latest_jpeg_lock:
+                                _latest_jpeg = buf.tobytes()
+                    else:
                         with _latest_jpeg_lock:
-                            _latest_jpeg = buf.tobytes()
+                            _latest_jpeg = None
                 except Exception as e:
-                    log.debug(f"Frame encode error: {e}")
+                    import traceback
+                    log.error(f"Inference error: {e}\n{traceback.format_exc()}")
+                    break
 
                 # - Run detections ------------------------
                 dets  = []
-                m_map = (
-                    res.meta._meta_map
-                    if hasattr(res, 'meta') and hasattr(res.meta, '_meta_map')
-                    else {}
-                )
-                base = m_map.get("detections") or m_map.get("objects")
+                m_map = {}
+                if hasattr(res, 'meta') and hasattr(res.meta, '_meta_map'):
+                    m_map = res.meta._meta_map
+                    if isinstance(m_map, str):
+                        try: m_map = json.loads(m_map)
+                        except Exception: m_map = {}
 
+                # Ensure m_map is a dict
+                if not isinstance(m_map, dict):
+                    m_map = {}
+
+                base = m_map.get("detections") or m_map.get("objects")
                 if base:
                     h, w    = res.image.height, res.image.width
                     indices = range(len(base)) if hasattr(base, '__len__') else []
@@ -875,8 +927,8 @@ def _run_inference(cfg, args):
             _stream.stop()
 
         except Exception as e:
-            log.error(f"Inference error: {e}")
-            break
+            import traceback
+            log.error(f"STREAM CRASH: {e}\n{traceback.format_exc()}")
         finally:
             if _stream is not None:
                 try:
@@ -952,6 +1004,11 @@ def run_command_server(port, fallback_cfg, args):
                     except Exception: pass
                 _inference_done.wait(timeout=5.0)
                 conn.sendall(b"STOPPED\n")
+            
+            elif cmd == "toggle_video":
+                _video_enabled = (body.lower() == "on")
+                logger.info(f"Video encoding: {'ENABLED' if _video_enabled else 'DISABLED'}")
+                conn.sendall(b"OK\n")
 
             elif cmd == "status":
                 info = {
@@ -983,6 +1040,7 @@ if __name__ == "__main__":
     parser.add_argument("--meta-port",  type=int, default=5566)
     parser.add_argument("--skip-frames", type=int, default=1)
     parser.add_argument("--log-file",    type=str, default=None)
+    parser.add_argument("--no-display",  action="store_true", help="Disable local visualization window")
     
     # Capture SDK args for from_parsed_args fallback if needed
     known_args, sdk_args_raw = parser.parse_known_args()
@@ -995,6 +1053,10 @@ if __name__ == "__main__":
     PORT_VIDEO    = known_args.video_port
     PORT_METADATA = known_args.meta_port
     _SKIP_FRAMES  = known_args.skip_frames
+
+    if known_args.no_display:
+        os.environ["AXELERA_DISABLE_DISPLAY"] = "1"
+        logger.info("Local display DISABLED")
 
     # Re-parse to get the full args namespace that SDK helpers expect
     args = parser.parse_args()

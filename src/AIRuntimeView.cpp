@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QHeaderView>
+#include <QCheckBox>
 #include "ConfigManager.h"
 #include "LiveMonitoringWidget.h"
 #include "InferenceResourceManager.h"
@@ -22,7 +23,8 @@ AIRuntimeView::AIRuntimeView(QWidget *parent) :
     ui(new Ui::AIRuntimeView),
     m_netManager(new QNetworkAccessManager(this)),
     m_metadataClient(new MetadataClient(this)),
-    m_liveWidget(nullptr)
+    m_liveWidget(nullptr),
+    m_videoStreamEnabled(true)
 {
     m_metadataClient->setBaseUrl(ConfigManager::instance().metadataUrl());
     ui->setupUi(this);
@@ -127,14 +129,30 @@ AIRuntimeView::AIRuntimeView(QWidget *parent) :
     connect(m_aipuTimer, &QTimer::timeout, this, &AIRuntimeView::updateAipuStatus);
     m_aipuTimer->start(2000);
 
-    ui->tableSources->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ui->btnStop->setEnabled(false);
+    ui->tableSources->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+
+    // Add Video Toggle to Pipeline Control group (Model Settings area)
+    QCheckBox *videoToggle = new QCheckBox("Display Video", this);
+    videoToggle->setChecked(true);
+    videoToggle->setStyleSheet("color: white; font-weight: bold;");
+    ui->formPipeline->addRow("Display Video:", videoToggle);
+
+    connect(videoToggle, &QCheckBox::toggled, this, [this](bool checked){
+        m_videoStreamEnabled = checked;
+        for (auto worker : m_workers.values()) {
+            worker->setVideoStreamEnabled(checked);
+        }
+        if (m_liveWidget && !checked) {
+            m_liveWidget->stop(); // Clear current frame
+        }
+    });
+
 }
 
 AIRuntimeView::~AIRuntimeView()
 {
     stopInference();
-    
     saveSettings();
     delete ui;
 }
@@ -202,6 +220,7 @@ void AIRuntimeView::startInference()
 
     // Create Worker
     AIInferenceWorker* worker = new AIInferenceWorker(configJson, this);
+    worker->setInitialVideoStreamEnabled(m_videoStreamEnabled);
     m_workers[profileName] = worker;
     m_activeProfile = profileName;
 
@@ -610,7 +629,7 @@ void AIRuntimeView::onFrameReceived(const QImage& frame)
 
     QString profile = worker->profileName();
     if (profile == m_activeProfile) {
-        if (m_liveWidget) {
+        if (m_liveWidget && m_videoStreamEnabled) {
             m_liveWidget->updateNativeFrame(0, frame, m_latestDetectionsMap[profile]);
         }
     }

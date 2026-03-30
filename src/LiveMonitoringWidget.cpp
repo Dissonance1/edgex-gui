@@ -55,8 +55,6 @@ void LiveMonitoringWidget::paintEvent(QPaintEvent *event)
             if (det.contains("box_norm")) {
                 QJsonArray boxNorm = det["box_norm"].toArray();
                 if (boxNorm.size() == 4) {
-                    // Coordinates are normalized [0.0 - 1.0] relative to model input
-                    // We map them directly to the scaled image dimensions
                     int bx = x + boxNorm[0].toDouble() * scaled.width();
                     int by = y + boxNorm[1].toDouble() * scaled.height();
                     int bw = boxNorm[2].toDouble() * scaled.width();
@@ -79,7 +77,7 @@ void LiveMonitoringWidget::paintEvent(QPaintEvent *event)
                 // Fallback for old pixel-based detections
                 QJsonArray bboxArray = det["bounding_box"].toArray();
                 if (bboxArray.size() == 4) {
-                    double scaleX = (double)scaled.width() / 640.0; // Assume 640 original
+                    double scaleX = (double)scaled.width() / 640.0;
                     double scaleY = (double)scaled.height() / 640.0;
 
                     int bx = x + bboxArray[0].toInt() * scaleX;

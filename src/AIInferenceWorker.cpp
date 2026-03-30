@@ -52,6 +52,11 @@ void AIInferenceWorker::start()
     qint64 epoch = QDateTime::currentSecsSinceEpoch();
     arguments << "--log-file"   << QString("/data/edgex-gui/logs/profile_%1_%2.log").arg(m_profileName.toLower().replace(" ", "_")).arg(epoch);
     
+    // Pass display mode to backend
+    if (m_config["display"].toString() == "Headless") {
+        arguments << "--no-display";
+    }
+    
     // Convert config to JSON for the start command later, but we also pass it if the backend needs initial state
     // For now, the backend will wait for the "start" command on the CMD port.
 
@@ -79,8 +84,9 @@ void AIInferenceWorker::start()
     env.insert("AXELERA_RUNTIME_DIR", "/opt/axelera/runtime-1.5.2-1");
     // Force SDK to look in the global build directory for pre-compiled binaries (.axnet)
     env.insert("AXELERA_BUILD_DIR", "/data/voyager-sdk/build");
-    // Ensure cache is in a persistent location with enough space
-    env.insert("AXELERA_CACHE_DIR", "/data/.axelera_cache");
+    // Force SDK to use the data-partition cache for weights and metadata to skip re-quantization
+    env.insert("HOME", "/data/os_data_move/home/aetina");
+    env.insert("AXELERA_CACHE_DIR", "/data/os_data_move/home/aetina/.cache/axelera");
     env.insert("LD_LIBRARY_PATH", "/opt/axelera/runtime-1.5.2-1/lib:/data/voyager-sdk/operators/lib");
     env.insert("PYTHONPATH", "/data/voyager-sdk:/opt/axelera/runtime-1.5.2-1/tvm/tvm-src");
     env.insert("PKG_CONFIG_PATH", "/opt/axelera/runtime-1.5.2-1/lib/pkgconfig:/data/voyager-sdk/operators/lib/pkgconfig");
@@ -126,6 +132,19 @@ void AIInferenceWorker::stop()
     if (m_cmdSocket) m_cmdSocket->disconnectFromHost();
 }
 
+void AIInferenceWorker::setVideoStreamEnabled(bool enabled)
+{
+    if (!isRunning() || !m_cmdSocket || m_cmdSocket->state() != QAbstractSocket::ConnectedState) {
+        return;
+    }
+
+    QString cmd = QString("toggle_video:%1\n").arg(enabled ? "on" : "off");
+    m_cmdSocket->write(cmd.toUtf8());
+    m_cmdSocket->flush();
+    
+    emit logMessage(QString("[%1] Video Stream: %2").arg(m_profileName, enabled ? "ENABLED" : "DISABLED"));
+}
+
 void AIInferenceWorker::onProcessStarted()
 {
     emit logMessage(QString("[%1] Backend process started. Connecting sockets...").arg(m_profileName));
@@ -166,8 +185,15 @@ void AIInferenceWorker::connectSockets()
         QJsonDocument doc(m_config);
         QString startCmd = "start:" + QString::fromUtf8(doc.toJson(QJsonDocument::Compact)) + "\n";
         m_cmdSocket->write(startCmd.toUtf8());
+        
+        // Send initial video state if disabled
+        if (!m_videoStreamEnabled) {
+            QString toggleCmd = "toggle_video:off\n";
+            m_cmdSocket->write(toggleCmd.toUtf8());
+        }
+
         m_cmdSocket->flush();
-        emit logMessage(QString("[%1] Connected to backend. Start command sent.").arg(m_profileName));
+        emit logMessage(QString("[%1] Connected to backend. Configuration sent.").arg(m_profileName));
         emit statusChanged("Running");
     }, Qt::UniqueConnection);
 }
