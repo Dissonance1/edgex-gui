@@ -1,6 +1,6 @@
 {
   "id": "face_detection_notification",
-  "sql": "SELECT CAST(confidence, \"float\") AS confidence, meta(deviceName) AS DeviceName, recognized_names AS Authorized FROM FaceStream WHERE CAST(confidence, \"float\") >= 70",
+  "sql": "SELECT CAST(confidence, \"float\") AS confidence, meta(deviceName) AS DeviceName, recognized_names AS Authorized FROM EdgeXStream WHERE CAST(confidence, \"float\") >= 70",
   "actions": [
     {
       "rest": {

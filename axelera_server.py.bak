@@ -9,204 +9,35 @@ import logging
 import argparse
 import datetime
 import requests
-import yaml
 from pathlib import Path
 
 # --- Constants & Globals ---
 DEFAULT_CONFIG = "config_multi_camera.json"
-PORT_VIDEO     = 5568
-PORT_METADATA  = 5566
-PORT_COMMAND   = 5567
-_SKIP_FRAMES   = 1 # 1=none, 2=half, etc.
+TELEMETRY_PORT = 5566
+COMMAND_PORT   = 5567
+VIDEO_PORT     = 5568
 
-# Per-profile stream state: {name: {"stream": obj|None, "stop_event": Event, "done_event": Event}}
-_profiles      = {}
-_profiles_lock = threading.Lock()
-
-# Serialize SDK stream creation: create_inference_stream is not re-entrant;
-# concurrent calls from two profile threads crash in the SDK's native init code.
-_stream_create_lock = threading.Lock()
-
-# Thread-local storage so each inference thread carries its own AIPU core offset
-_tls = threading.local()
-
-_latest_jpeg   = None
-_running       = True
-_video_enabled = True # Runtime toggle for JPEG encoding
-_gui_clients    = []
-_gui_clients_lock = threading.Lock()
-
-_latest_jpeg_lock = threading.Lock()
+_running            = True
+_latest_jpeg        = None
+_latest_jpeg_lock   = threading.Lock()
+_gui_clients        = []
+_gui_clients_lock   = threading.Lock()
+_stream             = None          # The actual SDK stream object
+_stream_lock        = threading.Lock()
+_stop_event         = threading.Event()   # Signals the inference loop to stop
+_inference_done     = threading.Event()   # Set when thread fully exits
 
 # Configure logging
-def setup_logging(log_file=None):
-    handlers = [logging.StreamHandler(sys.stdout)]
-    if log_file:
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir, exist_ok=True)
-        handlers.append(logging.FileHandler(log_file))
-    
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - [%(levelname)s] - %(message)s',
-        handlers=handlers
-    )
-    return logging.getLogger("MASTER")
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - [%(levelname)s] - %(message)s'
+)
+logger = logging.getLogger("MASTER")
 
-logger = None # Will be initialized in main
-
-# SDK Root — strip any CRLF that can come from Windows-edited shell scripts
-_sdk_root = os.environ.get("AXELERA_FRAMEWORK", "/data/voyager-sdk").strip()
+# SDK Root
+_sdk_root = os.environ.get("AXELERA_FRAMEWORK", "/data/voyager-sdk")
 if _sdk_root not in sys.path:
-    sys.path.insert(0, _sdk_root)
-
-# --- SDK Monkey Patch for Multi-Process Core Partitioning ---
-# The SDK's DeviceManager hardcodes core_index to 0 for each process.
-# We patch it to use AXELERA_CORE_OFFSET as the starting core.
-#
-# Problem: configure_device() for core 0 blocks the entire driver while any
-# other inference process is running (driver-level serialization on core-0 ops).
-# Even stripping device_firmware=1 doesn't help — mvm_utilisation_core_0 alone
-# also blocks. Setting AXELERA_CONFIGURE_BOARD=0 makes _get_configures() return {}
-# so configure_device is never called at all.
-#
-# Strategy:
-#   - First process to run: attempt configure_device in a daemon thread with a
-#     12-second timeout; create the boot flag whether it succeeds or times out.
-#   - Every subsequent process: main() has already set AXELERA_CONFIGURE_BOARD=0
-#     so _get_configures returns {} and configure_device is never reached.
-_FIRMWARE_FLAG = "/tmp/.axelera_board_fw_loaded"
-
-try:
-    import axelera.app.device_manager as device_manager
-    from axelera.app.pipe import io as _pipe_io
-    import re as _re_patch
-    import time
-
-    _original_configure_boards = device_manager._AipuDeviceManager._configure_boards
-
-    def _patched_configure_boards(self, nn):
-        # Per-thread core offset wins; fall back to env var for single-process launches
-        core_offset = getattr(_tls, 'core_offset', int(os.environ.get("AXELERA_CORE_OFFSET", "0")))
-        core_limit  = getattr(_tls, 'core_limit',  int(os.environ.get("AXELERA_CORE_LIMIT", "0")))
-
-        proc_start = core_offset
-        proc_end   = proc_start + (core_limit if core_limit > 0 else 4)
-        current_offset = proc_start
-
-        configures = {}
-        last = proc_start
-        patch_logger = logging.getLogger("SDK-PATCH")
-
-        for task in nn.tasks:
-            if not getattr(task, 'is_dl_task', True):
-                continue
-
-            requested_cores = task.aipu_cores
-            task_offset = current_offset
-            task.aipu_cores = min(requested_cores, proc_end - task_offset)
-            if task.aipu_cores < 1: task.aipu_cores = 1
-            task_offset = current_offset
-            task_end    = task_offset + task.aipu_cores
-
-            patch_logger.info(f"Task '{getattr(task, 'name', 'unknown')}' "
-                              f"(Model Req: {requested_cores}, Process Limit: {task.aipu_cores}) "
-                              f"at Hardware Offset: {task_offset}")
-
-            clock = nn.model_infos.clock_profile(task.model_info.name, self.metis)
-            mvm = nn.model_infos.mvm_limitation(task.model_info.name, self.metis)
-            configures.update(device_manager._get_configures(task_offset, task_end, clock, mvm))
-
-            if task_end > last:
-                last = task_end
-            current_offset = task_end
-
-        if configures:
-            # AXELERA_CONFIGURE_BOARD=0 was set by main() when the flag already existed,
-            # so _get_configures returned {} and we never reach here for late-starting
-            # processes. This branch only runs for the first process this boot.
-            conf_str = ', '.join(f"{k}={v}" for k, v in configures.items())
-            patch_logger.info(f"--- CORE PARTITIONING ACTIVE ---")
-            patch_logger.info(f"Process Base Offset: {proc_start}")
-            patch_logger.info(f"Allocated Core Range: {list(range(proc_start, last))}")
-            patch_logger.info(f"Board Configuration: {conf_str}")
-
-            # Run configure_device in a daemon thread with a 12-second timeout.
-            # Core-0 reconfiguration blocks if another inference process has the
-            # driver locked. We proceed regardless and mark the board as initialised
-            # so that future processes skip configure_device via AXELERA_CONFIGURE_BOARD=0.
-            _ctx  = self.context
-            _devs = list(self.devices)
-            _cfg  = configures.copy()
-
-            def _do_configure():
-                ready = [_ctx.configure_device(d, **_cfg) for d in _devs]
-                if not all(ready):
-                    deadline = time.time() + 25
-                    while not all(_ctx.device_ready(d) for d in _devs):
-                        if time.time() > deadline:
-                            raise RuntimeError("device_ready timeout (25 s)")
-                        time.sleep(0.3)
-
-            t = threading.Thread(target=_do_configure, daemon=True)
-            t.start()
-            t.join(timeout=12)
-            if t.is_alive():
-                patch_logger.warning(
-                    "configure_device blocked for 12 s — another process holds the device. "
-                    "Proceeding with existing hardware state (firmware pre-loaded at boot).")
-            else:
-                patch_logger.info("AIPU cores READY.")
-
-            # Create the boot flag so main() of every future process in this session
-            # sets AXELERA_CONFIGURE_BOARD=0 and never calls configure_device at all.
-            try:
-                open(_FIRMWARE_FLAG, 'w').close()
-            except OSError as e:
-                patch_logger.warning(f"Could not create firmware flag: {e}")
-
-        # Return the clock freqs for tracers (expects {core_id: freq})
-        return device_manager._get_core_clocks(self.context, self.devices[0], proc_start, last)
-
-    # Apply the configure_boards patch
-    device_manager._AipuDeviceManager._configure_boards = _patched_configure_boards
-    logging.getLogger("SDK-PATCH").info("Successfully applied core offset monkey-patch to Axelera SDK")
-
-    # --- V4L2 io-mode=mmap patch ---
-    # GStreamer v4l2src defaults to io-mode=auto which negotiates DMA-BUF with
-    # downstream elements (like Axelera's custom pool). When two USB cameras run
-    # simultaneously, VIDIOC_REQBUFS / VIDIOC_EXPBUF exhausts the kernel DMA-BUF
-    # allocator, causing "Buffer pool activation failed" on the second camera.
-    # Forcing io-mode=2 (mmap) makes each v4l2src allocate its own kernel mmap'd
-    # buffers backed by regular RAM, completely avoiding DMA-BUF contention.
-    _orig_build_gst_usb = _pipe_io._build_gst_usb
-
-    def _patched_build_gst_usb(gst, src):
-        codec = src.codec or 'mjpg'
-        codecs = {
-            'mjpg': 'image/jpeg',
-            'image/jpeg': 'image/jpeg',
-            'yuyv': 'video/x-raw,format=YUY2',
-        }
-        caps = codecs.get(codec)
-        if caps is None:
-            return _orig_build_gst_usb(gst, src)
-        loc = (f"/dev/video{src.location!s}"
-               if _re_patch.match(r'\d+$', src.location) else src.location)
-        gst.v4l2src({'io-mode': 2}, device=loc)
-        dimensions = (f'width={src.width},height={src.height}'
-                      if src.width and src.height else '')
-        framerate = f'framerate={src.fps}/1' if src.fps else ''
-        extras = ''.join(f',{x}' for x in [dimensions, framerate] if x)
-        gst.capsfilter(caps=f'{caps}{extras}')
-        return 'jpeg' in caps
-
-    _pipe_io._build_gst_usb = _patched_build_gst_usb
-    logging.getLogger("SDK-PATCH").info("Applied v4l2src io-mode=mmap patch for multi-camera support")
-
-except Exception as e:
-    logging.getLogger("SDK-PATCH").error(f"CRITICAL: Failed to patch SDK: {e}")
+    sys.path.append(_sdk_root)
 
 
 # ==============================================================================
@@ -455,7 +286,7 @@ def fetch_and_cache_profile(profile_name):
         resolver_map = _build_resolver_map(resources)
 
         with _profile_lock:
-            _profile_cache[profile_name] = {
+            _profile_cache = {
                 "profile_name": profile_name,
                 "resources":    resources,
                 "resolver_map": resolver_map,
@@ -480,9 +311,9 @@ def async_fetch_profile(profile_name):
         daemon=True
     ).start()
 
-def build_payload(device_name, inference_output, profile_name=None):
+def build_payload(device_name, inference_output):
     """
-    Build SenML payload for the cached profile identified by profile_name.
+    Build SenML payload for whatever profile is currently cached.
     """
     NUMERIC_TYPES = {
         "Float32", "Float64",
@@ -492,12 +323,7 @@ def build_payload(device_name, inference_output, profile_name=None):
     BOOL_TYPES = {"Bool"}
 
     with _profile_lock:
-        if profile_name and profile_name in _profile_cache:
-            cache = _profile_cache[profile_name].copy()
-        elif _profile_cache:
-            cache = next(iter(_profile_cache.values())).copy()
-        else:
-            cache = {}
+        cache = _profile_cache.copy()
 
     if not cache:
         logger.warning("[PayloadBuilder] No profile cached - skipping.")
@@ -562,21 +388,18 @@ def send_edgex_payload(device_name, profile_name, inference_output=None, templat
         payload = template
     else:
         with _profile_lock:
-            cache = _profile_cache.get(profile_name, {}).copy() if profile_name else {}
-            if not cache and _profile_cache:
-                cache = next(iter(_profile_cache.values())).copy()
+            cache = _profile_cache.copy()
 
         if not cache:
             logger.warning(f"Profile '{profile_name}' not yet cached - skipping frame.")
             return
 
         # - Debug: log once per profile -----------------
-        _debugged_key = f"_debugged_{profile_name}"
-        if not getattr(send_edgex_payload, _debugged_key, False):
+        if not hasattr(send_edgex_payload, "_debugged"):
             debug_profile_vs_rawdata(cache["resources"], cache["resolver_map"], inference_output or {})
-            setattr(send_edgex_payload, _debugged_key, True)
+            send_edgex_payload._debugged = True
 
-        payload = build_payload(device_name, inference_output or {}, profile_name=profile_name)
+        payload = build_payload(device_name, inference_output or {})
         logger.info(f"Built {len(payload)}-record payload for '{device_name}'")
 
     url = f"http://localhost:4000/core-data/api/v3/event/device-rest/{device_name}/{profile_name}/all"
@@ -598,83 +421,9 @@ def send_edgex_payload(device_name, profile_name, inference_output=None, templat
 # INFERENCE ENGINE
 # ==============================================================================
 
-def _get_inference_configs(cfg, base_args):
-    """Safely build Axelera SDK config objects without using from_parsed_args to avoid sys.exit triggers."""
-    from axelera.app import config as ax_config
-    
-    # GUI config mapping (Robust against key casing)
-    model_path = str(cfg.get("modelPath", cfg.get("model_path", getattr(base_args, "network", "")))).strip()
-    cam_source = str(cfg.get("cameraSource", cfg.get("camera_source", getattr(base_args, "sources", ["usb:0"])[0]))).strip()
-    aipu_cores = str(cfg.get("aipuCores", cfg.get("aipu_cores", getattr(base_args, "devices", "0")))).strip()
-    pipe_type  = str(cfg.get("pipelineType", cfg.get("pipeline_type", getattr(base_args, "pipe", "gst")))).strip()
-
-    # 1. SystemConfig
-    sc = ax_config.SystemConfig(
-        data_root=Path(base_args.data_root) if hasattr(base_args, "data_root") and base_args.data_root else None,
-        build_root=Path(base_args.build_root) if hasattr(base_args, "build_root") and base_args.build_root else None,
-        hardware_caps=ax_config.HardwareCaps.DEFAULT,
-        allow_hardware_codec=getattr(base_args, 'enable_hardware_codec', False)
-    )
-
-    # 2. InferenceStreamConfig
-    stc = ax_config.InferenceStreamConfig(
-        timeout=int(getattr(base_args, 'timeout', 5)),
-        frames=int(getattr(base_args, 'frames', 0))
-    )
-
-    # CORE PARTITIONING LOGIC:
-    # We use AXELERA_CORE_OFFSET environment variable to pin the process to a core.
-    # The device_selector identifies the Metis chip (always "0").
-    device_id = "0"
-    core_offset = os.environ.get("AXELERA_CORE_OFFSET", "0")
-    
-    # Calculate core COUNT from the string (e.g., "0,1" -> 2 cores, "2" -> 1 core)
-    core_list = [c.strip() for c in aipu_cores.split(",") if c.strip()]
-    core_count = len(core_list) if core_list else 1
-    
-    logger.info(f"Process partitioning: Metis Device {device_id}, Core Offset {core_offset}, Core Count {core_count}")
-
-    # 3. PipelineConfig
-    # Manual configuration mapping to bypass SDK argparse limitations 
-    pc = ax_config.PipelineConfig(
-        network=model_path,
-        sources=[ax_config.Source(cam_source)],
-        pipe_type=pipe_type,
-        device_selector=device_id, # Always use chip index 0
-        aipu_cores=core_count,     # Use actual core count requested
-        rtsp_latency=int(getattr(base_args, 'rtsp_latency', 500)),
-        low_latency=bool(getattr(base_args, 'low_latency', False)),
-        save_output=str(getattr(base_args, 'save_output', ""))
-    )
-
-    lc = ax_config.LoggingConfig()
-    dc = ax_config.DeployConfig()
-
-    return sc, stc, pc, lc, dc
-
-def _run_inference(cfg, args, profile_name="default"):
-    global _latest_jpeg, _running, _SKIP_FRAMES
-    log = logging.getLogger(f"Inference-{profile_name}")
-
-    # Retrieve per-profile events; bail if the profile was already removed
-    with _profiles_lock:
-        ps = _profiles.get(profile_name)
-    if ps is None:
-        return
-    stop_event = ps["stop_event"]
-    done_event = ps["done_event"]
-    done_event.clear()
-
-    # Pin this thread's AIPU cores so the SDK monkey-patch uses the right offset.
-    # "0,1" → offset=0, count=2.  "2,3" → offset=2, count=2.
-    cores_raw = str(cfg.get("aipuCores", "0")).strip()
-    core_list = [c.strip() for c in cores_raw.split(",") if c.strip()]
-    if core_list:
-        try:
-            _tls.core_offset = int(core_list[0])
-        except ValueError:
-            _tls.core_offset = 0
-        _tls.core_limit = len(core_list)
+def _run_inference(cfg):
+    global _stream, _latest_jpeg, _running
+    log = logging.getLogger("Inference")
 
     try:
         from axelera.app import config as ax_config, yaml_parser
@@ -682,16 +431,11 @@ def _run_inference(cfg, args, profile_name="default"):
         import cv2
     except Exception as e:
         log.error(f"Axelera SDK import error: {e}")
-        done_event.set()
+        _inference_done.set()
         return
 
     # - Parse model name / path -----------------------
-    model = str(cfg.get("modelPath", "")).strip()
-
-    if not model:
-        log.error("CRITICAL: No modelPath provided in configuration! Aborting launch to prevent on-the-fly compilation.")
-        done_event.set()
-        return
+    model = str(cfg.get("modelPath", "yolov8n-coco-onnx")).strip()
 
     if not os.path.isabs(model) and not os.path.exists(model):
         search_dirs = [
@@ -770,11 +514,12 @@ def _run_inference(cfg, args, profile_name="default"):
                     break
         
         if not found_labels:
+            import yaml
             if os.path.exists(model):
                 with open(model, 'r') as f:
-                    ydata = yaml.safe_load(f)
-                if ydata and "datasets" in ydata:
-                    for dname, dinfo in ydata["datasets"].items():
+                    mdata = yaml.safe_load(f)
+                if mdata and "datasets" in mdata:
+                    for dname, dinfo in mdata["datasets"].items():
                         names_found = None
                         if "names" in dinfo:
                             names_found = dinfo["names"]
@@ -785,8 +530,8 @@ def _run_inference(cfg, args, profile_name="default"):
                             dyaml = os.path.join(ddir, dinfo["ultralytics_data_yaml"])
                             if os.path.exists(dyaml):
                                 with open(dyaml, 'r') as fy:
-                                    ydata_inner = yaml.safe_load(fy)
-                                names_found = ydata_inner.get("names")
+                                    ydata = yaml.safe_load(fy)
+                                names_found = ydata.get("names")
                         
                         if names_found:
                             if isinstance(names_found, list):
@@ -803,110 +548,96 @@ def _run_inference(cfg, args, profile_name="default"):
     edgex_profile  = cfg.get("edgexProfileName", "")
     senml_template = cfg.get("edgexPayloadTemplate", None)
 
-    log.info(f"START: model={model} source={src}")
+    log.info(
+        f"START: model={model} source={src} cores={cores} "
+        f"conf={conf} edgex={edgex_device}/{edgex_profile}"
+    )
+
+    # - Build SDK args ----------------------------
+    original_argv = sys.argv[:]
+    sys.argv      = [sys.argv[0]]
+    parser        = ax_config.create_inference_argparser(yaml_parser.get_network_yaml_info())
+
+    pipe    = str(cfg.get("pipelineType", "gst")).strip().lower()
+    metis   = "m2"  # Hardcoded as requested
+    display_raw = str(cfg.get("displayMode", "none")).strip().lower()
+
+    display = "none"
+    if "window" in display_raw:
+        display = "window"
+    elif "headless" in display_raw:
+        display = "none"
+    else:
+        display = display_raw
+
+    args_list = [
+        model, src,
+        "--display", display,
+        "--pipe", pipe,
+        "--metis", metis,
+        "--aipu-cores", str(cores)
+    ]
+    log.info(f"SDK Args: {args_list}")
+    try:
+        args = parser.parse_args(args_list)
+    except SystemExit:
+        log.error("SDK Parser help:")
+        parser.print_help()
+        raise
+    sys.argv = original_argv
+
+    args.data_root  = Path(_sdk_root) / "ax_models"
+    args.build_root = Path(_sdk_root) / "build"
 
     is_file = not src.startswith("usb:") and not src.startswith("rtsp:") and os.path.exists(src)
 
-    if edgex_profile:
-        async_fetch_profile(edgex_profile)
-
-    while not stop_event.is_set():
-        stream = None
+    while not _stop_event.is_set():
+        sdk_stream = None
         try:
-            # - Build SDK configs safely -------------------
-            model = cfg.get("modelPath", "")
-            if model.endswith(".yaml") and os.path.exists(model):
-                # YAML-AWARE RESOLVER: We parse the YAML to see exactly what weights it needs.
-                # If weights are relative and missing, we link them from the global cache.
-                try:
-                    ydata = {}
-                    m_dir = os.path.dirname(model)
-                    with open(model, 'r') as f:
-                        ydata = yaml.safe_load(f)
-                    
-                    models_info = ydata.get("models", {})
-                    for m_name, m_cfg in models_info.items():
-                        w_path = m_cfg.get("weight_path")
-                        if w_path and not os.path.isabs(w_path):
-                            # Target location the SDK expects
-                            target = os.path.abspath(os.path.join(m_dir, w_path))
-                            if not os.path.exists(target):
-                                # Search in global /data cache
-                                fname = os.path.basename(w_path)
-                                # Possible cache locations
-                                cache_opts = [
-                                    f"/data/os_data_move/home/aetina/.cache/axelera/weights/{m_name}/{fname}",
-                                    f"/data/voyager-sdk/weights/{fname}"
-                                ]
-                                for opt in cache_opts:
-                                    if os.path.exists(opt):
-                                        os.makedirs(os.path.dirname(target), exist_ok=True)
-                                        os.symlink(opt, target)
-                                        log.info(f"Resolved weight: {fname} -> {opt}")
-                                        break
+            sc  = ax_config.SystemConfig.from_parsed_args(args)
+            stc = ax_config.InferenceStreamConfig.from_parsed_args(args)
+            pc  = ax_config.PipelineConfig.from_parsed_args(args)
 
-                    # Also ensure 'build' link exists for binaries
-                    b_link = os.path.join(m_dir, "build")
-                    if not os.path.exists(b_link):
-                        os.symlink("/data/voyager-sdk/build", b_link)
-                        log.info(f"Auto-linked build cache to {m_dir}")
+            if edgex_profile:
+                with _profile_lock:
+                    _profile_cache = {}
+                async_fetch_profile(edgex_profile)
 
-                except Exception as e:
-                    log.warning(f"YAML Resolver failed: {e}")
+            lc  = ax_config.LoggingConfig.from_parsed_args(args)
+            dc  = ax_config.DeployConfig.from_parsed_args(args)
 
-            sc, stc, pc, lc, dc = _get_inference_configs(cfg, args)
-            pc.network = model
-            # Serialize stream creation — SDK native init is not re-entrant;
-            # two threads calling create_inference_stream concurrently segfault.
-            with _stream_create_lock:
-                log.info("Acquiring stream-create lock...")
-                stream = create_inference_stream(sc, stc, pc, lc, dc)
-            with _profiles_lock:
-                if profile_name in _profiles:
-                    _profiles[profile_name]["stream"] = stream
-
+            sdk_stream = create_inference_stream(sc, stc, pc, lc, dc)
+            with _stream_lock:
+                if _stop_event.is_set():
+                    sdk_stream.stop()
+                    break
+                _stream = sdk_stream
             log.info("Stream online.")
 
             # - Per-frame loop --------------------------
-            frame_idx = 0
-            for res in stream:
-                if stop_event.is_set():
+            for res in sdk_stream:
+                if _stop_event.is_set():
                     break
-                
-                frame_idx += 1
-                if frame_idx % _SKIP_FRAMES != 0:
-                    continue
 
                 # - Encode JPEG frame ----------------------
                 try:
-                    if _video_enabled:
-                        img      = res.image.asarray("BGR")
-                        ret, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 50])
-                        if ret:
-                            with _latest_jpeg_lock:
-                                _latest_jpeg = buf.tobytes()
-                    else:
+                    img      = res.image.asarray("BGR")
+                    ret, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                    if ret:
                         with _latest_jpeg_lock:
-                            _latest_jpeg = None
+                            _latest_jpeg = buf.tobytes()
                 except Exception as e:
-                    import traceback
-                    log.error(f"Inference error: {e}\n{traceback.format_exc()}")
-                    break
+                    log.debug(f"Frame encode error: {e}")
 
                 # - Run detections ------------------------
                 dets  = []
-                m_map = {}
-                if hasattr(res, 'meta') and hasattr(res.meta, '_meta_map'):
-                    m_map = res.meta._meta_map
-                    if isinstance(m_map, str):
-                        try: m_map = json.loads(m_map)
-                        except Exception: m_map = {}
-
-                # Ensure m_map is a dict
-                if not isinstance(m_map, dict):
-                    m_map = {}
-
+                m_map = (
+                    res.meta._meta_map
+                    if hasattr(res, 'meta') and hasattr(res.meta, '_meta_map')
+                    else {}
+                )
                 base = m_map.get("detections") or m_map.get("objects")
+
                 if base:
                     h, w    = res.image.height, res.image.width
                     indices = range(len(base)) if hasattr(base, '__len__') else []
@@ -1034,36 +765,34 @@ def _run_inference(cfg, args, profile_name="default"):
                     "edgexProfile": edgex_profile,
                 })
 
-            if not is_file or stop_event.is_set():
+            if not is_file or _stop_event.is_set():
                 break
             log.info("Looping video file...")
-            stream.stop()
+            sdk_stream.stop()
 
         except Exception as e:
-            import traceback
-            log.error(f"STREAM CRASH: {e}\n{traceback.format_exc()}")
+            log.error(f"Inference error: {e}")
+            break
         finally:
-            if stream is not None:
+            if sdk_stream is not None:
                 try:
                     log.info("Closing SDK stream...")
-                    stream.stop()
+                    sdk_stream.stop()
                 except Exception:
                     pass
-            with _profiles_lock:
-                if profile_name in _profiles:
-                    _profiles[profile_name]["stream"] = None
+            with _stream_lock:
+                _stream = None
 
-    done_event.set()
-    log.info(f"Inference thread done for '{profile_name}'.")
+    _inference_done.set()
+    log.info("Inference thread done.")
 
 
 # ==============================================================================
 # COMMAND SERVER
 # ==============================================================================
 
-
-def run_command_server(port, fallback_cfg, args):
-    global _running
+def run_command_server(port, fallback):
+    global _running, _stream
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(("0.0.0.0", port))
@@ -1074,129 +803,58 @@ def run_command_server(port, fallback_cfg, args):
     while _running:
         try:
             conn, addr = srv.accept()
-            # Read until newline
-            buffer = b""
-            while True:
-                chunk = conn.recv(4096)
-                if not chunk:
-                    break
-                buffer += chunk
-                if b"\n" in chunk:
-                    break
-
-            # Decode and take only the first complete line
-            decoded = buffer.decode("utf-8")
-            lines = [l.strip() for l in decoded.split("\n") if l.strip()]
-            if not lines:
+            raw = conn.recv(10240).decode("utf-8").strip()
+            if not raw:
                 conn.close()
                 continue
 
-            raw = lines[0]
-
-            # Command format:
-            #   start:ProfileName:config_json   (named multi-stream)
-            #   start:config_json               (legacy single-stream → profile "default")
-            #   stop:ProfileName                (stop one profile)
-            #   stop                            (stop all profiles)
-            cmd = raw.split(":", 1)[0]
-            # Preserve everything after the first colon intact so JSON colons aren't split
-            after_cmd = raw[len(cmd)+1:] if ":" in raw else ""
+            cmd  = raw.split(":", 1)[0]
+            body = raw.split(":", 1)[1] if ":" in raw else ""
 
             if cmd == "start":
-                # GUI format:   start:{"modelPath":"..."}        → no profile name
-                # Named format: start:ProfileName:{"modelPath":...}
-                body = after_cmd.strip()
-                if body.startswith("{"):
-                    # GUI sends JSON directly — single-profile per process
-                    profile_name = "default"
-                    cfg_str = body
-                else:
-                    # Named format: everything before the first '{' is the profile name
-                    brace = body.find("{")
-                    if brace == -1:
-                        profile_name = body.rstrip(":")
-                        cfg_str = ""
-                    else:
-                        profile_name = body[:brace].rstrip(":").strip()
-                        cfg_str = body[brace:]
+                try:
+                    cfg = json.loads(body) if body else fallback
+                except Exception:
+                    cfg = fallback
 
-                with _profiles_lock:
-                    ps = _profiles.get(profile_name)
-                    already = ps is not None and ps.get("stream") is not None
+                with _stream_lock:
+                    existing_stream = _stream
 
-                if already:
-                    conn.sendall(b"ALREADY_RUNNING\n")
-                else:
+                if existing_stream is not None:
+                    logger.info("Stopping existing inference before switching model...")
+                    _stop_event.set()
                     try:
-                        cfg = json.loads(cfg_str) if cfg_str.strip() else fallback_cfg
-                        logger.info(f"RECEIVED CONFIG for '{profile_name}': {json.dumps(cfg)}")
-                    except Exception as e:
-                        logger.error(f"Config parse error: {e}")
-                        conn.sendall(b"ERROR:PARSE_FAILED\n")
-                        conn.close()
-                        continue
-                    stop_ev = threading.Event()
-                    done_ev = threading.Event()
-                    with _profiles_lock:
-                        _profiles[profile_name] = {
-                            "stream":     None,
-                            "stop_event": stop_ev,
-                            "done_event": done_ev,
-                        }
-                    threading.Thread(
-                        target=_run_inference,
-                        args=(cfg, args, profile_name),
-                        daemon=True,
-                    ).start()
-                    conn.sendall(b"OK\n")
+                        existing_stream.stop()
+                    except Exception:
+                        pass
+                    _inference_done.wait(timeout=10.0)
+                    logger.info("Old stream released. Starting new model...")
+                    time.sleep(1.0)
+
+                _stop_event.clear()
+                _inference_done.clear()
+                threading.Thread(
+                    target=_run_inference, args=(cfg,), daemon=True
+                ).start()
+                conn.sendall(b"OK\n")
 
             elif cmd == "stop":
-                profile_name = after_cmd.strip()
-                with _profiles_lock:
-                    targets = [profile_name] if profile_name and profile_name in _profiles \
-                              else list(_profiles.keys())
-
-                for pname in targets:
-                    with _profiles_lock:
-                        ps = _profiles.get(pname)
-                    if ps:
-                        ps["stop_event"].set()
-                        stream = ps.get("stream")
-                        if stream is not None:
-                            try: stream.stop()
-                            except Exception: pass
-                        ps["done_event"].wait(timeout=5.0)
-                        with _profiles_lock:
-                            _profiles.pop(pname, None)
-                conn.sendall(b"STOPPED\n")
-
-            elif cmd == "toggle_video":
-                _video_enabled = (after_cmd.lower() == "on")
-                logger.info(f"Video encoding: {'ENABLED' if _video_enabled else 'DISABLED'}")
-                conn.sendall(b"OK\n")
-
-            elif cmd == "status":
-                with _profiles_lock:
-                    profiles_status = {
-                        name: {"running": ps.get("stream") is not None}
-                        for name, ps in _profiles.items()
-                    }
-                info = {
-                    "running": bool(profiles_status),
-                    "profiles": profiles_status,
-                    "ports": {
-                        "video": PORT_VIDEO,
-                        "meta": PORT_METADATA,
-                        "cmd": PORT_COMMAND
-                    }
-                }
-                conn.sendall((json.dumps(info) + "\n").encode())
-
-            elif cmd == "shutdown":
-                conn.sendall(b"OK\n")
-                conn.close()
-                _running = False
-                break
+                with _stream_lock:
+                    existing = _stream
+                if existing is not None:
+                    logger.info("Stop requested - releasing AIPU cores...")
+                    _stop_event.set()
+                    with _profile_lock:
+                        _profile_cache = {}
+                    try:
+                        existing.stop()
+                    except Exception:
+                        pass
+                    with _stream_lock:
+                        _stream = None
+                    conn.sendall(b"STOPPING\n")
+                else:
+                    conn.sendall(b"IDLE\n")
 
             conn.close()
         except socket.timeout:
@@ -1211,41 +869,7 @@ def run_command_server(port, fallback_cfg, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config",     default=DEFAULT_CONFIG)
-    parser.add_argument("--cmd-port",   type=int, default=5567)
-    parser.add_argument("--video-port", type=int, default=5568)
-    parser.add_argument("--meta-port",  type=int, default=5566)
-    parser.add_argument("--skip-frames", type=int, default=1)
-    parser.add_argument("--log-file",    type=str, default=None)
-    parser.add_argument("--no-display",  action="store_true", help="Disable local visualization window")
-    
-    # Capture SDK args for from_parsed_args fallback if needed
-    known_args, sdk_args_raw = parser.parse_known_args()
-    
-    # Initialize logger
-    logger = setup_logging(known_args.log_file)
-    
-    # Initialize globals with CLI args
-    PORT_COMMAND  = known_args.cmd_port
-    PORT_VIDEO    = known_args.video_port
-    PORT_METADATA = known_args.meta_port
-    _SKIP_FRAMES  = known_args.skip_frames
-
-    if known_args.no_display:
-        os.environ["AXELERA_DISABLE_DISPLAY"] = "1"
-        logger.info("Local display DISABLED")
-
-    # If another process already initialised the AIPU board this boot, skip
-    # configure_device entirely by telling the SDK to bypass board reconfiguration.
-    # configure_device for core 0 blocks permanently while other inference processes
-    # are running (driver-level serialisation). AXELERA_CONFIGURE_BOARD=0 makes
-    # _get_configures() return {} so the blocking call is never made.
-    if os.path.exists(_FIRMWARE_FLAG):
-        os.environ.setdefault("AXELERA_CONFIGURE_BOARD", "0")
-        logger.info("AIPU board already initialised this boot — skipping board reconfiguration "
-                    "(AXELERA_CONFIGURE_BOARD=0)")
-
-    # Re-parse to get the full args namespace that SDK helpers expect
+    parser.add_argument("--config", default=DEFAULT_CONFIG)
     args = parser.parse_args()
 
     try:
@@ -1254,23 +878,16 @@ if __name__ == "__main__":
     except Exception:
         cfg = {}
 
-    threading.Thread(target=run_video_server,     args=(PORT_VIDEO,),        daemon=True).start()
-    threading.Thread(target=run_telemetry_server,  args=(PORT_METADATA,),     daemon=True).start()
-    threading.Thread(target=run_command_server,    args=(PORT_COMMAND, cfg, args), daemon=True).start()
+    threading.Thread(target=run_video_server,     args=(VIDEO_PORT,),        daemon=True).start()
+    threading.Thread(target=run_telemetry_server,  args=(TELEMETRY_PORT,),   daemon=True).start()
+    threading.Thread(target=run_command_server,    args=(COMMAND_PORT, cfg), daemon=True).start()
 
-    logger.info(f"Axelera Server Online. Ports: CMD={PORT_COMMAND}, VIDEO={PORT_VIDEO}, META={PORT_METADATA}")
+    logger.info("Axelera Server Online.")
     try:
-        while _running:
+        while True:
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
-        with _profiles_lock:
-            all_profiles = list(_profiles.items())
-        for pname, ps in all_profiles:
-            ps["stop_event"].set()
-            stream = ps.get("stream")
-            if stream:
-                try: stream.stop()
-                except Exception: pass
+        _stop_event.set()
         _running = False
         time.sleep(1)

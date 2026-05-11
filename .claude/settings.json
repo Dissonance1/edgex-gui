@@ -1,0 +1,68 @@
+{
+  "project": "edgex-gui",
+  "description": "Multi-camera AI inference GUI for Axelera Metis AIPU on Aetina AN110",
+
+  "environment": {
+    "target_device": "aetina@10.12.83.250",
+    "remote_path": "/data/edgex-gui",
+    "sdk_path": "/data/voyager-sdk",
+    "venv_python": "/data/voyager-sdk/venv/bin/python3",
+    "boot_flag": "/tmp/.axelera_board_fw_loaded",
+    "local_src": "/home/rog_strix/src/edgex-gui"
+  },
+
+  "sync": {
+    "command": "wsl -d Ubuntu bash -c \"rsync -avz --exclude '__pycache__' -e 'ssh -o StrictHostKeyChecking=no' {file} aetina@10.12.83.250:/data/edgex-gui/\"",
+    "full_sync_script": "sync_to_aetina.sh",
+    "always_dos2unix_after_sync": ["setup_axelera_env.sh", "start_backend.sh"]
+  },
+
+  "ports": {
+    "profile_1": { "cmd": 5567, "video": 5568, "meta": 5566 },
+    "profile_2": { "cmd": 5570, "video": 5571, "meta": 5569 },
+    "profile_3": { "cmd": 5573, "video": 5574, "meta": 5572 }
+  },
+
+  "aipu_cores": {
+    "total": 4,
+    "profile_1_offset": 0,
+    "profile_1_limit": 2,
+    "profile_2_offset": 2,
+    "profile_2_limit": 2
+  },
+
+  "cameras": {
+    "brio_1": { "capture_node": "/dev/video20", "sdk_ref": "usb:20", "usb_bus": "7-1.1" },
+    "brio_2": { "capture_node": "/dev/video22", "sdk_ref": "usb:22", "usb_bus": "7-1.2" },
+    "note": "Odd-numbered nodes (21, 23) are metadata-only — never use as capture source"
+  },
+
+  "models": {
+    "yolo_coco":    "yolov8n-coco-onnx",
+    "face_person":  "/data/voyager-sdk/ax_models/zoo/yolo/object_detection/voyager-person-detection.yaml",
+    "xray_baggage": "/data/voyager-sdk/customers/xray/yolov8n-xray-baggage.yaml"
+  },
+
+  "known_issues": {
+    "usb_bandwidth": "Two Brio 100 cameras on usb 7 share bandwidth; one must run at <=640x480",
+    "configure_device_block": "configure_device() for core-0 blocks while any inference runs; solved via AXELERA_CONFIGURE_BOARD=0 + boot flag",
+    "sdk_not_reentrant": "create_inference_stream() crashes if called from two threads in same process; use one process per profile",
+    "crlf_corruption": "Windows-edited .sh files export PYTHONPATH with \\r; always dos2unix after Windows sync",
+    "wrong_camera_node": "usb:21 opens /dev/video21 (metadata only) — no frames, pipeline stays READY forever"
+  },
+
+  "patches_in_server": {
+    "_patched_configure_boards": "Core offset partitioning + 12s timeout on configure_device",
+    "_patched_build_gst_usb": "Forces v4l2src io-mode=2 (mmap) to avoid DMA-BUF contention with multi-camera",
+    "stream_create_lock": "_stream_create_lock serialises create_inference_stream() calls within one process",
+    "sdk_path_strip": "_sdk_root uses .strip() to remove CRLF from env var"
+  },
+
+  "preferences": {
+    "default_editor": "Edit tool (not Write) for existing files",
+    "sync_after_edit": true,
+    "test_after_sync": true,
+    "log_verbosity": "INFO",
+    "skip_frames": 1
+  }
+}
