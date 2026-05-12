@@ -1,3 +1,0 @@
-{
-    "sql": "CREATE STREAM EdgeXStream () WITH (format = \"JSON\", type = \"redisSub\", datasource = \"edgex/events/device/face_recog/_Face-recog/confidence\", CONF_KEY = \"default\")"
-}

@@ -1,3 +1,0 @@
-{
-    "sql": "CREATE STREAM FaceStream () WITH (FORMAT=\"JSON\", TYPE=\"edgex\", CONF_KEY=\"redis_conf\")"
-}
